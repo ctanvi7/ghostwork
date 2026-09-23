@@ -160,9 +160,10 @@ class MemoryStore:
             return original_count - len(self.tables[table])
 
     def clear_all(self) -> None:
-        """Clear all tables (for testing)."""
+        """Clear all tables and reseed (for testing)."""
         with self._lock:
             for table in self.tables:
                 self.tables[table].clear()
             self._id_counters = {t: 0 for t in self.tables}
-            self._seed_data()
+        # Call _seed_data outside the lock to avoid deadlock on re-entrant lock
+        self._seed_data()
