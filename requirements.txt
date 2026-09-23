@@ -1,0 +1,7 @@
+Flask==3.1.3
+python-dotenv==1.2.3
+requests==2.34.2
+anthropic==0.25.0
+supabase==2.3.5
+pydantic==1.10.15
+waitress==2.1.2
