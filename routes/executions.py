@@ -3,6 +3,7 @@
 from flask import Blueprint, jsonify, request
 
 from app import NotFoundError, ValidationError
+from orchestrator.workflow import run_execution
 from services.supabase_service import get_service
 
 executions_bp = Blueprint("executions", __name__, url_prefix="/api")
@@ -12,15 +13,16 @@ executions_bp = Blueprint("executions", __name__, url_prefix="/api")
 def create_execution():
     """
     POST /api/executions
-    Create a new execution for a workflow.
+    Create a new execution for a workflow and start it.
 
     Request body:
     {
       "workflow_id": 1,
-      "ticket_id": 2048
+      "ticket_id": 2048,
+      "refund_amount": 32000
     }
 
-    Returns: 201 Created
+    Returns: 202 Accepted
     {
       "id": 1,
       "workflow_id": 1,
@@ -36,6 +38,7 @@ def create_execution():
 
     workflow_id = data.get("workflow_id")
     ticket_id = data.get("ticket_id")
+    refund_amount = data.get("refund_amount")
 
     if not workflow_id:
         raise ValidationError("workflow_id is required")
@@ -48,10 +51,14 @@ def create_execution():
         raise NotFoundError(f"Workflow {workflow_id} not found")
 
     # Create execution
-    exec_id = service.create_execution(workflow_id, ticket_id)
+    exec_id = service.create_execution(workflow_id, ticket_id, refund_amount)
+
+    # Start execution (synchronous for testing, would be async in production)
+    run_execution(exec_id)
+
     execution = service.get_execution(exec_id)
 
-    return jsonify(execution), 201
+    return jsonify(execution), 202
 
 
 @executions_bp.route("/executions/<int:execution_id>", methods=["GET"])

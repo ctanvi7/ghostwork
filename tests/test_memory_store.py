@@ -16,34 +16,35 @@ class TestMemoryStore:
     def test_insert_workflow(self):
         """Insert a new workflow."""
         store = MemoryStore()
-        store.clear_all()  # Start fresh
+        store.clear_all()  # Start fresh (reseeds with Refund Verification workflow)
 
+        # After clear_all, the seeded workflow is ID 1, so next insert is ID 2
         id_val = store.insert("workflows", {"name": "Test Workflow"})
-        assert id_val == 1
+        assert id_val == 2
 
-        result = store.select_one("workflows", {"id": 1})
+        result = store.select_one("workflows", {"id": 2})
         assert result["name"] == "Test Workflow"
 
     def test_insert_auto_increments(self):
         """Inserts auto-increment ID."""
         store = MemoryStore()
-        store.clear_all()
+        store.clear_all()  # Reseeds with workflow ID=1
 
         id1 = store.insert("workflows", {"name": "WF1"})
         id2 = store.insert("workflows", {"name": "WF2"})
-        assert id1 == 1
-        assert id2 == 2
+        assert id1 == 2
+        assert id2 == 3
 
     def test_select_all(self):
         """Select returns all rows when no where clause."""
         store = MemoryStore()
-        store.clear_all()
+        store.clear_all()  # Has seeded workflow ID=1
 
         store.insert("workflows", {"name": "WF1"})
         store.insert("workflows", {"name": "WF2"})
 
         rows = store.select("workflows")
-        assert len(rows) == 2
+        assert len(rows) == 3  # Seeded + 2 inserted
 
     def test_select_with_where(self):
         """Select filters by where clause."""
@@ -148,8 +149,11 @@ class TestMemoryStore:
         assert count == 1
 
         rows = store.select("workflows")
-        assert len(rows) == 1
-        assert rows[0]["name"] == "WF2"
+        # Seeded workflow + WF2 (WF1 was deleted)
+        assert len(rows) == 2
+        names = [r["name"] for r in rows]
+        assert "WF2" in names
+        assert "WF1" not in names
 
     def test_clear_all(self):
         """Clear all resets store and reloads seed data."""
@@ -194,7 +198,8 @@ class TestMemoryStore:
 
         # All IDs should be unique
         assert len(set(results)) == 5
-        assert len(store.select("workflows")) == 5
+        # Seeded workflow + 5 inserted
+        assert len(store.select("workflows")) == 6
 
     def test_execution_workflow(self):
         """Test a realistic execution creation and update workflow."""

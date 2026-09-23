@@ -189,11 +189,13 @@ def create_app(config_override: Optional[Dict[str, Any]] = None) -> Flask:
 
 def register_blueprints(app: Flask) -> None:
     """Register all blueprints for API routes."""
+    from routes.approvals import approvals_bp
     from routes.executions import executions_bp
     from routes.workflows import workflows_bp
 
     app.register_blueprint(executions_bp)
     app.register_blueprint(workflows_bp)
+    app.register_blueprint(approvals_bp)
 
 
 def register_health_routes(app: Flask) -> None:

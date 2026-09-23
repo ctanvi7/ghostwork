@@ -125,6 +125,7 @@ class SupabaseService:
         step_name: str,
         agent: Optional[str] = None,
         status: str = "RUNNING",
+        step_order: Optional[int] = None,
     ) -> int:
         """Create an execution step. Returns step ID."""
         now = datetime.now(timezone.utc).isoformat()
@@ -133,6 +134,7 @@ class SupabaseService:
             "step_name": step_name,
             "agent": agent,
             "status": status,
+            "step_order": step_order,
             "attempt": 1,
             "started_at": now,
             "created_at": now,
@@ -150,6 +152,20 @@ class SupabaseService:
 
         if self.backend == "memory":
             return self._get_store().update("execution_steps", step_id, fields)
+        raise NotImplementedError("Supabase backend not yet implemented")
+
+    def select(
+        self, table: str, where: dict = None, limit: int = None
+    ) -> List[Dict[str, Any]]:
+        """Generic select for testing."""
+        if self.backend == "memory":
+            return self._get_store().select(table, where, limit)
+        raise NotImplementedError("Supabase backend not yet implemented")
+
+    def select_one(self, table: str, where: dict) -> dict | None:
+        """Generic select_one for testing."""
+        if self.backend == "memory":
+            return self._get_store().select_one(table, where)
         raise NotImplementedError("Supabase backend not yet implemented")
 
     def get_execution_steps(self, execution_id: int) -> List[Dict[str, Any]]:

@@ -1,5 +1,10 @@
 """Shared test fixtures and configuration."""
 
+import os
+
+# Set DB_BACKEND before any imports
+os.environ["DB_BACKEND"] = "memory"
+
 import pytest
 
 from app import create_app
@@ -8,8 +13,20 @@ from app import create_app
 @pytest.fixture
 def app():
     """Create application for testing."""
+    # Reset the service singleton so a new one is created with the memory backend
+    import services.supabase_service as svc_module
+    svc_module._service = None
+
     app = create_app({"TESTING": True})
-    return app
+
+    # Clear data between tests
+    from services.supabase_service import get_service
+    get_service().clear_all()
+
+    yield app
+
+    # Cleanup after each test
+    svc_module._service = None
 
 
 @pytest.fixture
