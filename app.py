@@ -180,10 +180,20 @@ def create_app(config_override: Optional[Dict[str, Any]] = None) -> Flask:
         for warning in warnings:
             app.logger.warning(warning)
 
-    # Register blueprint for health/integrations (no dedicated blueprint, just routes)
+    # Register blueprints
     register_health_routes(app)
+    register_blueprints(app)
 
     return app
+
+
+def register_blueprints(app: Flask) -> None:
+    """Register all blueprints for API routes."""
+    from routes.executions import executions_bp
+    from routes.workflows import workflows_bp
+
+    app.register_blueprint(executions_bp)
+    app.register_blueprint(workflows_bp)
 
 
 def register_health_routes(app: Flask) -> None:

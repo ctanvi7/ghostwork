@@ -1,5 +1,7 @@
 """Shared test fixtures and configuration."""
 
+import os
+
 import pytest
 
 from app import create_app
