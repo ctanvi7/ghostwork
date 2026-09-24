@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Integrations — GhostWork{% endblock %}
+
+{% block content %}
+<div class="integrations-page">
+    <section class="page-header">
+        <h1>Integrations</h1>
+        <p class="page-subtitle">External systems and their configuration status.</p>
+    </section>
+
+    <div id="loading" class="loading-state">
+        <p>Loading integration status...</p>
+    </div>
+
+    <div id="error" class="error-state" style="display:none;">
+        <p>Unable to load integration status. <button id="retry-btn">Try again</button></p>
+    </div>
+
+    <div id="content" style="display:none;">
+        <div class="integrations-grid" id="integrations-grid">
+            <!-- Populated by JavaScript -->
+        </div>
+
+        <section class="privacy-info">
+            <h2>Privacy & Security</h2>
+            <p>
+                GhostWork processes activity metadata only. No credentials, keys, or sensitive data are exposed.
+                All external integrations use secure authentication and error handling.
+            </p>
+        </section>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/integrations.js') }}"></script>
+{% endblock %}

@@ -9,13 +9,20 @@ const ui = (() => {
         // Create alert element
         const alert = document.createElement('div');
         alert.className = 'alert alert-error';
-        alert.innerHTML = `
-            <div class="alert-content">
-                <strong>${escapeHtml(title)}</strong>
-                <p>${escapeHtml(message)}</p>
-            </div>
-            <button class="alert-close" onclick="this.parentElement.remove()">×</button>
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'alert-close';
+        closeBtn.textContent = '×';
+        closeBtn.addEventListener('click', () => alert.remove());
+
+        const content = document.createElement('div');
+        content.className = 'alert-content';
+        content.innerHTML = `
+            <strong>${escapeHtml(title)}</strong>
+            <p>${escapeHtml(message)}</p>
         `;
+
+        alert.appendChild(content);
+        alert.appendChild(closeBtn);
 
         // Insert at top of main content
         const main = document.querySelector('.app-main');
@@ -37,12 +44,17 @@ const ui = (() => {
         // Create alert element
         const alert = document.createElement('div');
         alert.className = 'alert alert-success';
-        alert.innerHTML = `
-            <div class="alert-content">
-                <p>${escapeHtml(message)}</p>
-            </div>
-            <button class="alert-close" onclick="this.parentElement.remove()">×</button>
-        `;
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'alert-close';
+        closeBtn.textContent = '×';
+        closeBtn.addEventListener('click', () => alert.remove());
+
+        const content = document.createElement('div');
+        content.className = 'alert-content';
+        content.innerHTML = `<p>${escapeHtml(message)}</p>`;
+
+        alert.appendChild(content);
+        alert.appendChild(closeBtn);
 
         // Insert at top of main content
         const main = document.querySelector('.app-main');

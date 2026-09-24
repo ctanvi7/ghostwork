@@ -3,23 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}GhostWork{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>{% block title %}GhostWork — Workflow Intelligence{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/design-system.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
     <script src="{{ url_for('static', filename='js/api.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
 </head>
 <body>
-    <div class="container">
-        <header class="app-header">
-            <div class="header-content">
-                <h1 class="app-title"><a href="/">GhostWork</a></h1>
-                <p class="app-subtitle">Autonomous Workflow Execution</p>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-icon">👻</span>
+                    <span class="logo-text">GhostWork</span>
+                </div>
             </div>
-        </header>
 
-        <main class="app-main">
+            <nav class="sidebar-nav">
+                <ul>
+                    <li>
+                        <a href="/" class="nav-link {% if page_name == 'discovery' %}active{% endif %}">
+                            <span class="nav-icon">📊</span>
+                            <span class="nav-label">Discovery</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/executions" class="nav-link {% if page_name == 'executions' %}active{% endif %}">
+                            <span class="nav-icon">⚙️</span>
+                            <span class="nav-label">Executions</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="nav-link disabled" title="Coming in Phase 10C">
+                            <span class="nav-icon">✨</span>
+                            <span class="nav-label">GhostSkills</span>
+                            <span class="badge">Soon</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/integrations" class="nav-link {% if page_name == 'integrations' %}active{% endif %}">
+                            <span class="nav-icon">🔗</span>
+                            <span class="nav-label">Integrations</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="status-indicator">
+                    <span class="status-dot status-ok"></span>
+                    <span class="status-text">System OK</span>
+                </div>
+                <p class="privacy-badge">🔒 Metadata-only telemetry</p>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <div class="main-content">
             {% block content %}{% endblock %}
-        </main>
+        </div>
     </div>
 </body>
 </html>

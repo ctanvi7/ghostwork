@@ -61,6 +61,31 @@ def create_execution():
     return jsonify(execution), 202
 
 
+@executions_bp.route("/executions", methods=["GET"])
+def list_executions():
+    """
+    GET /api/executions
+    List recent executions.
+
+    Query params:
+    - limit: max results (default 20)
+    - offset: pagination offset (default 0)
+
+    Returns: 200 OK
+    {
+      "executions": [...],
+      "count": 5
+    }
+    """
+    limit = request.args.get("limit", default=20, type=int)
+    offset = request.args.get("offset", default=0, type=int)
+
+    service = get_service()
+    executions = service.list_executions(limit=limit, offset=offset)
+
+    return jsonify({"executions": executions, "count": len(executions)}), 200
+
+
 @executions_bp.route("/executions/<int:execution_id>", methods=["GET"])
 def get_execution(execution_id: int):
     """

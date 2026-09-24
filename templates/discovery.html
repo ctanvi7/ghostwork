@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Discovery — GhostWork{% endblock %}
+
+{% block content %}
+<div class="discovery-page">
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1 class="hero-title">GhostWork</h1>
+            <p class="hero-subtitle">Workflow Intelligence</p>
+            <p class="hero-description">
+                Find the work nobody documented — and turn it into safe AI automation.
+            </p>
+        </div>
+    </section>
+
+    <!-- Summary Metrics -->
+    <section class="metrics-section">
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <span class="metric-label">Workflows Discovered</span>
+                <span class="metric-value" id="metric-workflows">—</span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-label">Sessions Analyzed</span>
+                <span class="metric-value" id="metric-sessions">—</span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-label">Automation Opportunities</span>
+                <span class="metric-value" id="metric-instances">—</span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-label">Privacy Mode</span>
+                <span class="metric-value" id="metric-privacy">Metadata Only</span>
+            </div>
+        </div>
+
+        <div class="privacy-callout">
+            <p>🔒 <strong>Metadata only</strong> — no keystrokes, screenshots, or message contents.</p>
+        </div>
+    </section>
+
+    <!-- Loading/Error States -->
+    <div id="workflows-loading" class="loading-state">
+        <p>Discovering workflows...</p>
+    </div>
+
+    <div id="workflows-error" class="error-state" style="display:none;">
+        <p>Unable to load workflows. <button id="retry-btn">Try again</button></p>
+    </div>
+
+    <!-- Workflows Grid -->
+    <section class="workflows-section" id="workflows-section">
+        <h2 class="section-title">Discovered Workflows</h2>
+        <div class="workflows-grid" id="workflows-grid">
+            <!-- Populated by JavaScript -->
+        </div>
+    </section>
+</div>
+
+<script src="{{ url_for('static', filename='js/discovery.js') }}"></script>
+{% endblock %}

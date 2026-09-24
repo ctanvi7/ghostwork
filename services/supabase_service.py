@@ -163,6 +163,29 @@ class SupabaseService:
             logger.error(f"Failed to get execution {execution_id}: {e}")
             raise
 
+    def list_executions(
+        self, limit: int = 20, offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        """List recent executions with pagination."""
+        if self.backend == "memory":
+            all_execs = self._get_store().select("executions")
+            # Sort by created_at descending (newest first)
+            sorted_execs = sorted(all_execs, key=lambda x: x.get("created_at", ""), reverse=True)
+            return sorted_execs[offset : offset + limit]
+
+        try:
+            response = (
+                self._supabase_client.table("executions")
+                .select("*")
+                .order("created_at", desc=True)
+                .range(offset, offset + limit - 1)
+                .execute()
+            )
+            return response.data or []
+        except Exception as e:
+            logger.error(f"Failed to list executions: {e}")
+            return []
+
     def update_execution(
         self, execution_id: int, **fields
     ) -> int:

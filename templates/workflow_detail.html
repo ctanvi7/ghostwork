@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Workflow Detail — GhostWork{% endblock %}
+
+{% block content %}
+<div class="workflow-detail-page">
+    <div id="loading" class="loading-state">
+        <p>Loading workflow details...</p>
+    </div>
+
+    <div id="error" class="error-state" style="display:none;">
+        <p>Unable to load workflow. <a href="/">Back to Discovery</a></p>
+    </div>
+
+    <div id="content" style="display:none;">
+        <!-- Header -->
+        <section class="detail-header">
+            <a href="/" class="back-link">← Back to Discovery</a>
+
+            <div class="header-main">
+                <div class="header-title">
+                    <h1 id="workflow-name">—</h1>
+                    <p id="workflow-from" class="source-badge">Discovered from privacy-safe activity metadata</p>
+                </div>
+
+                <div class="header-ghostscore">
+                    <div class="ghostscore-display">
+                        <span class="score" id="workflow-score">—</span>
+                        <span class="grade" id="workflow-grade">—</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Metrics Grid -->
+        <section class="metrics-detail">
+            <div class="metric-item">
+                <span class="metric-label">Frequency</span>
+                <span class="metric-value" id="metric-frequency">—</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">Automation Potential</span>
+                <span class="metric-value" id="metric-automation">—</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">Average Duration</span>
+                <span class="metric-value" id="metric-duration">—</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">Risk Level</span>
+                <span class="metric-value" id="metric-risk">—</span>
+            </div>
+        </section>
+
+        <!-- GhostGraph -->
+        <section class="ghostgraph-section">
+            <h2 class="section-title">GhostGraph</h2>
+            <p class="section-subtitle">Reconstructed from repeated cross-tool activity.</p>
+            <div class="ghostgraph-container" id="ghostgraph"></div>
+        </section>
+
+        <!-- GhostScore Breakdown -->
+        <section class="ghostscore-breakdown">
+            <h2 class="section-title">Why This GhostScore?</h2>
+            <p class="section-subtitle">
+                GhostScore ranks recurring workflows by automation value using deterministic, explainable signals.
+            </p>
+
+            <div class="breakdown-components" id="breakdown-components">
+                <!-- Populated by JavaScript -->
+            </div>
+        </section>
+
+        <!-- Autonomy Boundary (Refund Verification only) -->
+        <section class="autonomy-section" id="autonomy-section" style="display:none;">
+            <h2 class="section-title">Autonomy Boundary</h2>
+
+            <div class="autonomy-content">
+                <div class="boundary-display">
+                    <p class="boundary-limit">₹25,000 automatic approval limit</p>
+                    <div class="boundary-explanation">
+                        <p><strong>Below boundary:</strong> Can proceed autonomously</p>
+                        <p><strong>Above boundary:</strong> Requires human approval</p>
+                    </div>
+                </div>
+
+                <p class="governance-note">
+                    <strong>Design principle:</strong> LLM for interpretation. Code for enforcement.
+                </p>
+            </div>
+        </section>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/workflow-detail.js') }}"></script>
+{% endblock %}
