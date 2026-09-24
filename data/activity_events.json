@@ -1,0 +1,303 @@
+[
+  {
+    "timestamp": "2026-09-24T09:00:00Z",
+    "session_id": "session_001",
+    "tool": "freshdesk",
+    "action": "ticket_opened",
+    "entity_type": "support_ticket"
+  },
+  {
+    "timestamp": "2026-09-24T09:05:00Z",
+    "session_id": "session_001",
+    "tool": "crm",
+    "action": "customer_lookup",
+    "entity_type": "customer"
+  },
+  {
+    "timestamp": "2026-09-24T09:10:00Z",
+    "session_id": "session_001",
+    "tool": "billing",
+    "action": "invoice_lookup",
+    "entity_type": "invoice"
+  },
+  {
+    "timestamp": "2026-09-24T09:15:00Z",
+    "session_id": "session_001",
+    "tool": "policy_engine",
+    "action": "policy_check",
+    "entity_type": "policy"
+  },
+  {
+    "timestamp": "2026-09-24T09:20:00Z",
+    "session_id": "session_001",
+    "tool": "approval_system",
+    "action": "approval_requested",
+    "entity_type": "approval"
+  },
+  {
+    "timestamp": "2026-09-24T09:25:00Z",
+    "session_id": "session_001",
+    "tool": "freshdesk",
+    "action": "ticket_updated",
+    "entity_type": "support_ticket"
+  },
+  {
+    "timestamp": "2026-09-24T10:00:00Z",
+    "session_id": "session_002",
+    "tool": "freshdesk",
+    "action": "ticket_opened",
+    "entity_type": "support_ticket"
+  },
+  {
+    "timestamp": "2026-09-24T10:05:00Z",
+    "session_id": "session_002",
+    "tool": "crm",
+    "action": "customer_lookup",
+    "entity_type": "customer"
+  },
+  {
+    "timestamp": "2026-09-24T10:10:00Z",
+    "session_id": "session_002",
+    "tool": "identity_service",
+    "action": "identity_verify",
+    "entity_type": "identity"
+  },
+  {
+    "timestamp": "2026-09-24T10:15:00Z",
+    "session_id": "session_002",
+    "tool": "crm",
+    "action": "customer_update",
+    "entity_type": "customer"
+  },
+  {
+    "timestamp": "2026-09-24T10:20:00Z",
+    "session_id": "session_002",
+    "tool": "freshdesk",
+    "action": "ticket_updated",
+    "entity_type": "support_ticket"
+  },
+  {
+    "timestamp": "2026-09-24T11:00:00Z",
+    "session_id": "session_003",
+    "tool": "freshdesk",
+    "action": "ticket_opened",
+    "entity_type": "support_ticket"
+  },
+  {
+    "timestamp": "2026-09-24T11:05:00Z",
+    "session_id": "session_003",
+    "tool": "billing",
+    "action": "invoice_lookup",
+    "entity_type": "invoice"
+  },
+  {
+    "timestamp": "2026-09-24T11:10:00Z",
+    "session_id": "session_003",
+    "tool": "billing",
+    "action": "dispute_lookup",
+    "entity_type": "dispute"
+  },
+  {
+    "timestamp": "2026-09-24T11:15:00Z",
+    "session_id": "session_003",
+    "tool": "policy_engine",
+    "action": "policy_check",
+    "entity_type": "policy"
+  },
+  {
+    "timestamp": "2026-09-24T11:20:00Z",
+    "session_id": "session_003",
+    "tool": "finance",
+    "action": "finance_review",
+    "entity_type": "review"
+  },
+  {
+    "timestamp": "2026-09-24T11:25:00Z",
+    "session_id": "session_003",
+    "tool": "freshdesk",
+    "action": "ticket_updated",
+    "entity_type": "support_ticket"
+  },
+  {
+    "timestamp": "2026-09-24T12:00:00Z",
+    "session_id": "session_004",
+    "tool": "freshdesk",
+    "action": "ticket_opened",
+    "entity_type": "support_ticket"
+  },
+  {
+    "timestamp": "2026-09-24T12:05:00Z",
+    "session_id": "session_004",
+    "tool": "crm",
+    "action": "customer_lookup",
+    "entity_type": "customer"
+  },
+  {
+    "timestamp": "2026-09-24T12:10:00Z",
+    "session_id": "session_004",
+    "tool": "billing",
+    "action": "invoice_lookup",
+    "entity_type": "invoice"
+  },
+  {
+    "timestamp": "2026-09-24T12:15:00Z",
+    "session_id": "session_004",
+    "tool": "policy_engine",
+    "action": "policy_check",
+    "entity_type": "policy"
+  },
+  {
+    "timestamp": "2026-09-24T12:20:00Z",
+    "session_id": "session_004",
+    "tool": "approval_system",
+    "action": "approval_requested",
+    "entity_type": "approval"
+  },
+  {
+    "timestamp": "2026-09-24T12:25:00Z",
+    "session_id": "session_004",
+    "tool": "freshdesk",
+    "action": "ticket_updated",
+    "entity_type": "support_ticket"
+  },
+  {
+    "timestamp": "2026-09-24T13:00:00Z",
+    "session_id": "session_005",
+    "tool": "freshdesk",
+    "action": "ticket_opened",
+    "entity_type": "support_ticket"
+  },
+  {
+    "timestamp": "2026-09-24T13:05:00Z",
+    "session_id": "session_005",
+    "tool": "crm",
+    "action": "customer_lookup",
+    "entity_type": "customer"
+  },
+  {
+    "timestamp": "2026-09-24T13:10:00Z",
+    "session_id": "session_005",
+    "tool": "identity_service",
+    "action": "identity_verify",
+    "entity_type": "identity"
+  },
+  {
+    "timestamp": "2026-09-24T13:15:00Z",
+    "session_id": "session_005",
+    "tool": "crm",
+    "action": "customer_update",
+    "entity_type": "customer"
+  },
+  {
+    "timestamp": "2026-09-24T13:20:00Z",
+    "session_id": "session_005",
+    "tool": "freshdesk",
+    "action": "ticket_updated",
+    "entity_type": "support_ticket"
+  },
+  {
+    "timestamp": "2026-09-24T14:00:00Z",
+    "session_id": "session_006",
+    "tool": "freshdesk",
+    "action": "ticket_opened",
+    "entity_type": "support_ticket"
+  },
+  {
+    "timestamp": "2026-09-24T14:05:00Z",
+    "session_id": "session_006",
+    "tool": "crm",
+    "action": "customer_lookup",
+    "entity_type": "customer"
+  },
+  {
+    "timestamp": "2026-09-24T14:10:00Z",
+    "session_id": "session_006",
+    "tool": "billing",
+    "action": "invoice_lookup",
+    "entity_type": "invoice"
+  },
+  {
+    "timestamp": "2026-09-24T14:15:00Z",
+    "session_id": "session_006",
+    "tool": "policy_engine",
+    "action": "policy_check",
+    "entity_type": "policy"
+  },
+  {
+    "timestamp": "2026-09-24T14:20:00Z",
+    "session_id": "session_006",
+    "tool": "approval_system",
+    "action": "approval_requested",
+    "entity_type": "approval"
+  },
+  {
+    "timestamp": "2026-09-24T14:25:00Z",
+    "session_id": "session_006",
+    "tool": "freshdesk",
+    "action": "ticket_updated",
+    "entity_type": "support_ticket"
+  },
+  {
+    "timestamp": "2026-09-24T15:00:00Z",
+    "session_id": "session_007",
+    "tool": "freshdesk",
+    "action": "ticket_opened",
+    "entity_type": "support_ticket"
+  },
+  {
+    "timestamp": "2026-09-24T15:05:00Z",
+    "session_id": "session_007",
+    "tool": "analytics",
+    "action": "report_generated",
+    "entity_type": "report"
+  },
+  {
+    "timestamp": "2026-09-24T15:10:00Z",
+    "session_id": "session_007",
+    "tool": "freshdesk",
+    "action": "ticket_closed",
+    "entity_type": "support_ticket"
+  },
+  {
+    "timestamp": "2026-09-24T16:00:00Z",
+    "session_id": "session_008",
+    "tool": "freshdesk",
+    "action": "ticket_opened",
+    "entity_type": "support_ticket"
+  },
+  {
+    "timestamp": "2026-09-24T16:05:00Z",
+    "session_id": "session_008",
+    "tool": "billing",
+    "action": "invoice_lookup",
+    "entity_type": "invoice"
+  },
+  {
+    "timestamp": "2026-09-24T16:10:00Z",
+    "session_id": "session_008",
+    "tool": "billing",
+    "action": "dispute_lookup",
+    "entity_type": "dispute"
+  },
+  {
+    "timestamp": "2026-09-24T16:15:00Z",
+    "session_id": "session_008",
+    "tool": "policy_engine",
+    "action": "policy_check",
+    "entity_type": "policy"
+  },
+  {
+    "timestamp": "2026-09-24T16:20:00Z",
+    "session_id": "session_008",
+    "tool": "finance",
+    "action": "finance_review",
+    "entity_type": "review"
+  },
+  {
+    "timestamp": "2026-09-24T16:25:00Z",
+    "session_id": "session_008",
+    "tool": "freshdesk",
+    "action": "ticket_updated",
+    "entity_type": "support_ticket"
+  }
+]
