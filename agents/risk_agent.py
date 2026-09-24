@@ -16,7 +16,7 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
 
     Returns:
         {
-            "status": "SUCCESS" or "PAUSE" (never "FAILED" - fail-closed is PAUSE),
+            "status": "SUCCESS" (always - never fails, just reports requires_approval flag),
             "result": {
                 "requires_approval": bool,
                 "amount": Decimal or None,
@@ -26,10 +26,12 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
         }
 
     Logic:
-    - If amount is missing, invalid, zero, or negative → require approval (fail closed)
-    - If amount <= effective_limit → SUCCESS (no approval needed)
-    - If amount > effective_limit → PAUSE (approval required)
+    - Deterministic assessment: always returns SUCCESS with requires_approval flag set
+    - If amount is missing, invalid, zero, or negative → requires_approval=true (fail closed)
+    - If amount <= effective_limit → requires_approval=false (no approval needed)
+    - If amount > effective_limit → requires_approval=true (approval required)
     - effective_limit = min(skill_limit, Config.AUTO_APPROVAL_LIMIT) if skill has a limit
+    - The approval_gate step checks the requires_approval flag and returns PAUSE if needed
 
     This agent is purely deterministic and makes no external calls.
     """
@@ -47,7 +49,7 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
     if amount is None:
         result["requires_approval"] = True
         result["reason"] = "refund_amount is missing"
-        return {"status": "PAUSE", "result": result}
+        return {"status": "SUCCESS", "result": result}
 
     # Convert to Decimal if it's a number type
     try:
@@ -59,18 +61,18 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
             # Invalid type
             result["requires_approval"] = True
             result["reason"] = f"refund_amount has invalid type: {type(amount).__name__}"
-            return {"status": "PAUSE", "result": result}
+            return {"status": "SUCCESS", "result": result}
     except (ValueError, TypeError, ArithmeticError):
         result["requires_approval"] = True
         result["reason"] = f"refund_amount cannot be converted to Decimal: {amount}"
-        return {"status": "PAUSE", "result": result}
+        return {"status": "SUCCESS", "result": result}
 
     # Fail closed: amount must be positive
     if amount <= Decimal("0"):
         result["requires_approval"] = True
         result["amount"] = amount
         result["reason"] = f"refund_amount must be positive, got {amount}"
-        return {"status": "PAUSE", "result": result}
+        return {"status": "SUCCESS", "result": result}
 
     result["amount"] = amount
 
@@ -100,7 +102,7 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
     if amount > effective_limit:
         result["requires_approval"] = True
         result["reason"] = f"refund_amount {amount} exceeds effective limit {effective_limit}"
-        return {"status": "PAUSE", "result": result}
+        return {"status": "SUCCESS", "result": result}
 
     result["requires_approval"] = False
     result["reason"] = f"refund_amount {amount} is within effective limit {effective_limit}"

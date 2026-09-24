@@ -69,6 +69,9 @@ def run_execution(execution_id: int) -> Dict[str, Any]:
 
     logger.info(f"Execution {execution_id}: resuming from step {resume_order}, {len(remaining_steps)} steps remain")
 
+    # Track last executed step for current_step field
+    last_executed_step = None
+
     # Execute remaining steps
     for step_def in remaining_steps:
         step_name = step_def.get("name")
@@ -104,6 +107,9 @@ def run_execution(execution_id: int) -> Dict[str, Any]:
 
             logger.info(f"Execution {execution_id}: step {step_name} returned {status}")
 
+            # Track last executed step
+            last_executed_step = step_name
+
             if status == "PAUSE":
                 # approval_gate returned PAUSE: transition to WAITING_FOR_APPROVAL and stop
                 transition(execution_id, "RUNNING", "WAITING_FOR_APPROVAL", current_step=step_name)
@@ -120,9 +126,9 @@ def run_execution(execution_id: int) -> Dict[str, Any]:
                 # Continue to next step
                 continue
             elif status == "FAILED":
-                # Transition to FAILED and stop
+                # Transition to FAILED and stop, update current_step to reflect the failed step
                 error_msg = output.get("error", "Step failed")
-                transition(execution_id, "RUNNING", "FAILED", error_message=error_msg)
+                transition(execution_id, "RUNNING", "FAILED", error_message=error_msg, current_step=step_name)
                 logger.error(f"Execution {execution_id}: step {step_name} failed: {error_msg}")
                 return service.get_execution(execution_id)
         except Exception as e:
@@ -130,15 +136,15 @@ def run_execution(execution_id: int) -> Dict[str, Any]:
             error_msg = str(e)
             try:
                 service.update_execution_step(step_id, status="FAILED")
-                transition(execution_id, "RUNNING", "FAILED", error_message=error_msg)
+                transition(execution_id, "RUNNING", "FAILED", error_message=error_msg, current_step=last_executed_step or step_name)
             except Exception as te:
                 logger.error(f"Failed to mark execution as FAILED: {te}")
             logger.error(f"Execution {execution_id}: unexpected error in step {step_name}: {e}")
             return service.get_execution(execution_id)
 
-    # All steps succeeded
+    # All steps succeeded: transition to COMPLETED with last executed step
     try:
-        transition(execution_id, "RUNNING", "COMPLETED")
+        transition(execution_id, "RUNNING", "COMPLETED", current_step=last_executed_step)
         logger.info(f"Execution {execution_id}: completed successfully")
     except Exception as e:
         logger.error(f"Failed to mark execution as completed: {e}")

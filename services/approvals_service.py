@@ -53,6 +53,21 @@ def decide(
             raw_response_json=raw_response
         )
 
+        # Update the approval_gate execution step to reflect the approved state
+        # Find the approval_gate step and update its output
+        steps = service.get_execution_steps(execution_id)
+        for step in steps:
+            if step.get("step_name") == "approval_gate":
+                service.update_execution_step(
+                    step["id"],
+                    output_json={
+                        "reason": "Approval granted by human",
+                        "approval_id": approval["id"]
+                    }
+                )
+                logger.info(f"Execution {execution_id}: updated approval_gate step output to reflect approval")
+                break
+
         # Transition execution: WAITING_FOR_APPROVAL -> APPROVED
         try:
             transition(execution_id, "WAITING_FOR_APPROVAL", "APPROVED")

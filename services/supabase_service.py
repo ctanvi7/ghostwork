@@ -1,10 +1,13 @@
 """Supabase/Memory DB persistence service with unified interface."""
 
+import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from config import Config
 from services.memory_store import MemoryStore
+
+logger = logging.getLogger(__name__)
 
 
 class SupabaseService:
@@ -14,10 +17,19 @@ class SupabaseService:
         """Initialize service with backend from config."""
         self.backend = Config.DB_BACKEND.lower()
         self._memory_store: Optional[MemoryStore] = None
+        self._supabase_client = None
 
         if self.backend == "memory":
             self._memory_store = MemoryStore()
-        elif self.backend != "supabase":
+        elif self.backend == "supabase":
+            try:
+                from supabase import create_client
+                if not Config.SUPABASE_URL or not Config.SUPABASE_KEY:
+                    raise ValueError("SUPABASE_URL and SUPABASE_KEY required for supabase backend")
+                self._supabase_client = create_client(Config.SUPABASE_URL, Config.SUPABASE_KEY)
+            except ImportError as e:
+                raise ImportError("supabase-py not installed. Install with: pip install supabase") from e
+        else:
             raise ValueError(f"Unknown DB_BACKEND: {Config.DB_BACKEND}")
 
     def _get_store(self) -> MemoryStore:
@@ -26,19 +38,56 @@ class SupabaseService:
             raise RuntimeError("Memory store not initialized. Check DB_BACKEND config.")
         return self._memory_store
 
+    def _map_output_to_result(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Map output_json field to result_json for Supabase schema."""
+        mapped = {k: v for k, v in data.items()}
+        if "output_json" in mapped:
+            mapped["result_json"] = mapped.pop("output_json")
+        return mapped
+
+    def _map_result_to_output(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """Map result_json field back to output_json for code consistency."""
+        if isinstance(row, dict) and "result_json" in row:
+            row["output_json"] = row.pop("result_json")
+        return row
+
+    def _map_raw_response(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Map raw_response_json field to raw_response for Supabase schema."""
+        mapped = {k: v for k, v in data.items()}
+        if "raw_response_json" in mapped:
+            mapped["raw_response"] = mapped.pop("raw_response_json")
+        return mapped
+
+    def _unmap_raw_response(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """Map raw_response field back to raw_response_json for code consistency."""
+        if isinstance(row, dict) and "raw_response" in row:
+            row["raw_response_json"] = row.pop("raw_response")
+        return row
+
     # Workflow queries
     def get_workflow(self, workflow_id: int) -> Optional[Dict[str, Any]]:
         """Get workflow by ID."""
         if self.backend == "memory":
             return self._get_store().select_one("workflows", {"id": workflow_id})
-        # Supabase: TODO, stub for now
-        raise NotImplementedError("Supabase backend not yet implemented")
+
+        try:
+            response = self._supabase_client.table("workflows").select("*").eq("id", workflow_id).execute()
+            return response.data[0] if response.data else None
+        except Exception as e:
+            logger.error(f"Failed to get workflow {workflow_id}: {e}")
+            raise
 
     def list_workflows(self) -> List[Dict[str, Any]]:
         """List all workflows."""
         if self.backend == "memory":
             return self._get_store().select("workflows")
-        raise NotImplementedError("Supabase backend not yet implemented")
+
+        try:
+            response = self._supabase_client.table("workflows").select("*").execute()
+            return response.data or []
+        except Exception as e:
+            logger.error(f"Failed to list workflows: {e}")
+            raise
 
     # Execution queries
     def create_execution(
@@ -60,7 +109,13 @@ class SupabaseService:
 
         if self.backend == "memory":
             return self._get_store().insert("executions", data)
-        raise NotImplementedError("Supabase backend not yet implemented")
+
+        try:
+            response = self._supabase_client.table("executions").insert(data).execute()
+            return response.data[0]["id"] if response.data else None
+        except Exception as e:
+            logger.error(f"Failed to create execution: {e}")
+            raise
 
     def get_execution(self, execution_id: int) -> Optional[Dict[str, Any]]:
         """Get execution by ID with all related data (steps, approvals)."""
@@ -79,7 +134,34 @@ class SupabaseService:
                 "steps": steps,
                 "approvals": approvals,
             }
-        raise NotImplementedError("Supabase backend not yet implemented")
+
+        try:
+            exec_response = self._supabase_client.table("executions").select("*").eq("id", execution_id).execute()
+            if not exec_response.data:
+                return None
+
+            exec_row = exec_response.data[0]
+
+            # Fetch related steps
+            steps_response = self._supabase_client.table("execution_steps").select("*").eq("execution_id", execution_id).execute()
+            steps = steps_response.data or []
+            # Map result_json back to output_json for consistency with code
+            steps = [self._map_result_to_output(step) for step in steps]
+
+            # Fetch related approvals
+            approvals_response = self._supabase_client.table("approvals").select("*").eq("execution_id", execution_id).execute()
+            approvals = approvals_response.data or []
+            # Map raw_response back to raw_response_json for consistency
+            approvals = [self._unmap_raw_response(approval) for approval in approvals]
+
+            return {
+                **exec_row,
+                "steps": steps,
+                "approvals": approvals,
+            }
+        except Exception as e:
+            logger.error(f"Failed to get execution {execution_id}: {e}")
+            raise
 
     def update_execution(
         self, execution_id: int, **fields
@@ -89,7 +171,13 @@ class SupabaseService:
 
         if self.backend == "memory":
             return self._get_store().update("executions", execution_id, fields)
-        raise NotImplementedError("Supabase backend not yet implemented")
+
+        try:
+            response = self._supabase_client.table("executions").update(fields).eq("id", execution_id).execute()
+            return len(response.data) if response.data else 0
+        except Exception as e:
+            logger.error(f"Failed to update execution {execution_id}: {e}")
+            raise
 
     def transition_execution(
         self,
@@ -116,7 +204,18 @@ class SupabaseService:
                 {"status": from_status},
                 update_data,
             )
-        raise NotImplementedError("Supabase backend not yet implemented")
+
+        try:
+            # Supabase CAS: fetch current, verify status, then update if match
+            current = self._supabase_client.table("executions").select("status").eq("id", execution_id).execute()
+            if not current.data or current.data[0]["status"] != from_status:
+                return 0
+
+            response = self._supabase_client.table("executions").update(update_data).eq("id", execution_id).execute()
+            return len(response.data) if response.data else 0
+        except Exception as e:
+            logger.error(f"Failed to transition execution {execution_id} from {from_status} to {to_status}: {e}")
+            raise
 
     # Execution steps
     def create_execution_step(
@@ -142,7 +241,13 @@ class SupabaseService:
 
         if self.backend == "memory":
             return self._get_store().insert("execution_steps", data)
-        raise NotImplementedError("Supabase backend not yet implemented")
+
+        try:
+            response = self._supabase_client.table("execution_steps").insert(data).execute()
+            return response.data[0]["id"] if response.data else None
+        except Exception as e:
+            logger.error(f"Failed to create execution step for execution {execution_id}: {e}")
+            raise
 
     def update_execution_step(
         self, step_id: int, **fields
@@ -152,7 +257,16 @@ class SupabaseService:
 
         if self.backend == "memory":
             return self._get_store().update("execution_steps", step_id, fields)
-        raise NotImplementedError("Supabase backend not yet implemented")
+
+        # Map output_json to result_json for Supabase
+        fields = self._map_output_to_result(fields)
+
+        try:
+            response = self._supabase_client.table("execution_steps").update(fields).eq("id", step_id).execute()
+            return len(response.data) if response.data else 0
+        except Exception as e:
+            logger.error(f"Failed to update execution step {step_id}: {e}")
+            raise
 
     def select(
         self, table: str, where: dict = None, limit: int = None
@@ -160,13 +274,50 @@ class SupabaseService:
         """Generic select for testing."""
         if self.backend == "memory":
             return self._get_store().select(table, where, limit)
-        raise NotImplementedError("Supabase backend not yet implemented")
+
+        try:
+            query = self._supabase_client.table(table).select("*")
+            if where:
+                for key, value in where.items():
+                    query = query.eq(key, value)
+            if limit:
+                query = query.limit(limit)
+            response = query.execute()
+            rows = response.data or []
+            # Map result_json fields for execution_steps table
+            if table == "execution_steps":
+                rows = [self._map_result_to_output(row) for row in rows]
+            # Map raw_response fields for approvals table
+            if table == "approvals":
+                rows = [self._unmap_raw_response(row) for row in rows]
+            return rows
+        except Exception as e:
+            logger.error(f"Failed to select from {table}: {e}")
+            raise
 
     def select_one(self, table: str, where: dict) -> dict | None:
         """Generic select_one for testing."""
         if self.backend == "memory":
             return self._get_store().select_one(table, where)
-        raise NotImplementedError("Supabase backend not yet implemented")
+
+        try:
+            query = self._supabase_client.table(table).select("*")
+            for key, value in where.items():
+                query = query.eq(key, value)
+            response = query.limit(1).execute()
+            if not response.data:
+                return None
+            row = response.data[0]
+            # Map result_json fields for execution_steps table
+            if table == "execution_steps":
+                row = self._map_result_to_output(row)
+            # Map raw_response fields for approvals table
+            if table == "approvals":
+                row = self._unmap_raw_response(row)
+            return row
+        except Exception as e:
+            logger.error(f"Failed to select_one from {table}: {e}")
+            raise
 
     def get_execution_steps(self, execution_id: int) -> List[Dict[str, Any]]:
         """Get all steps for an execution."""
@@ -174,7 +325,8 @@ class SupabaseService:
             return self._get_store().select(
                 "execution_steps", {"execution_id": execution_id}
             )
-        raise NotImplementedError("Supabase backend not yet implemented")
+
+        return self.select("execution_steps", {"execution_id": execution_id})
 
     def get_last_successful_step(
         self, execution_id: int
@@ -186,7 +338,18 @@ class SupabaseService:
                 {"execution_id": execution_id, "status": "SUCCESS"},
             )
             return steps[-1] if steps else None
-        raise NotImplementedError("Supabase backend not yet implemented")
+
+        try:
+            response = self._supabase_client.table("execution_steps").select("*").eq("execution_id", execution_id).eq("status", "SUCCESS").execute()
+            if not response.data:
+                return None
+            # Return the last one (order by step_order desc is better, but we'll sort in Python)
+            steps = response.data
+            steps.sort(key=lambda s: s.get("step_order", 0))
+            return self._map_result_to_output(steps[-1]) if steps else None
+        except Exception as e:
+            logger.error(f"Failed to get last successful step for execution {execution_id}: {e}")
+            raise
 
     # Approvals
     def create_approval(
@@ -207,7 +370,13 @@ class SupabaseService:
 
         if self.backend == "memory":
             return self._get_store().insert("approvals", data)
-        raise NotImplementedError("Supabase backend not yet implemented")
+
+        try:
+            response = self._supabase_client.table("approvals").insert(data).execute()
+            return response.data[0]["id"] if response.data else None
+        except Exception as e:
+            logger.error(f"Failed to create approval for execution {execution_id}: {e}")
+            raise
 
     def get_open_approval(self, execution_id: int) -> Optional[Dict[str, Any]]:
         """Get the open approval for an execution (if any)."""
@@ -219,7 +388,22 @@ class SupabaseService:
                 if approval["status"] in ("PENDING", "AWAITING_CONFIRMATION"):
                     return approval
             return None
-        raise NotImplementedError("Supabase backend not yet implemented")
+
+        try:
+            # Try PENDING first
+            response = self._supabase_client.table("approvals").select("*").eq("execution_id", execution_id).eq("status", "PENDING").limit(1).execute()
+            if response.data:
+                return self._unmap_raw_response(response.data[0])
+
+            # Try AWAITING_CONFIRMATION
+            response = self._supabase_client.table("approvals").select("*").eq("execution_id", execution_id).eq("status", "AWAITING_CONFIRMATION").limit(1).execute()
+            if response.data:
+                return self._unmap_raw_response(response.data[0])
+
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get open approval for execution {execution_id}: {e}")
+            raise
 
     def get_approved_approval(self, execution_id: int) -> Optional[Dict[str, Any]]:
         """Get the approved approval for an execution (if any)."""
@@ -228,7 +412,15 @@ class SupabaseService:
             return store.select_one(
                 "approvals", {"execution_id": execution_id, "status": "APPROVED"}
             )
-        raise NotImplementedError("Supabase backend not yet implemented")
+
+        try:
+            response = self._supabase_client.table("approvals").select("*").eq("execution_id", execution_id).eq("status", "APPROVED").limit(1).execute()
+            if response.data:
+                return self._unmap_raw_response(response.data[0])
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get approved approval for execution {execution_id}: {e}")
+            raise
 
     def update_approval(self, approval_id: int, **fields) -> int:
         """Update an approval record."""
@@ -236,7 +428,16 @@ class SupabaseService:
 
         if self.backend == "memory":
             return self._get_store().update("approvals", approval_id, fields)
-        raise NotImplementedError("Supabase backend not yet implemented")
+
+        # Map raw_response_json to raw_response for Supabase
+        fields = self._map_raw_response(fields)
+
+        try:
+            response = self._supabase_client.table("approvals").update(fields).eq("id", approval_id).execute()
+            return len(response.data) if response.data else 0
+        except Exception as e:
+            logger.error(f"Failed to update approval {approval_id}: {e}")
+            raise
 
     # Audit events
     def log_audit_event(
@@ -258,7 +459,13 @@ class SupabaseService:
 
         if self.backend == "memory":
             return self._get_store().insert("audit_events", data)
-        raise NotImplementedError("Supabase backend not yet implemented")
+
+        try:
+            response = self._supabase_client.table("audit_events").insert(data).execute()
+            return response.data[0]["id"] if response.data else None
+        except Exception as e:
+            logger.error(f"Failed to log audit event: {e}")
+            raise
 
     # Test utilities
     def clear_all(self) -> None:
@@ -266,7 +473,87 @@ class SupabaseService:
         if self.backend == "memory":
             self._get_store().clear_all()
         else:
-            raise NotImplementedError("Supabase backend not yet implemented")
+            # Supabase: delete all rows from tables (in reverse dependency order)
+            # This is only for testing, not recommended for production
+            try:
+                logger.warning("Clearing all Supabase tables - this should only be done in testing")
+                tables_to_clear = [
+                    "audit_events",
+                    "execution_steps",
+                    "approvals",
+                    "executions",
+                    "ghost_skills",
+                    "workflow_steps",
+                    "integrations",
+                    "workflows",
+                ]
+                for table in tables_to_clear:
+                    try:
+                        self._supabase_client.table(table).delete().neq("id", 0).execute()
+                    except Exception as e:
+                        logger.warning(f"Could not clear table {table}: {e}")
+                # Re-seed the Refund Verification workflow after clearing
+                self._reseed_demo_data()
+            except Exception as e:
+                logger.error(f"Failed to clear Supabase tables: {e}")
+                raise
+
+    def _reseed_demo_data(self) -> None:
+        """Reseed demo data after clearing (Supabase only)."""
+        if self.backend != "supabase":
+            return
+
+        try:
+            # Re-insert the Refund Verification workflow
+            now = datetime.now(timezone.utc).isoformat()
+
+            workflow_data = {
+                "name": "Refund Verification",
+                "description": "Process refund requests with approval gates",
+                "ghost_score": 87.0,
+                "frequency": 37,
+                "manual_duration_seconds": 667,
+                "automation_percentage": 78.0,
+                "created_at": now,
+                "updated_at": now,
+            }
+
+            workflow_response = self._supabase_client.table("workflows").insert(workflow_data).execute()
+            workflow_id = workflow_response.data[0]["id"] if workflow_response.data else 1
+
+            # Re-insert workflow steps
+            steps = [
+                {"workflow_id": workflow_id, "step_order": 1, "name": "context_agent", "agent": "context_agent", "classification": "ASSISTED", "created_at": now},
+                {"workflow_id": workflow_id, "step_order": 2, "name": "billing_agent", "agent": "billing_agent", "classification": "AUTOMATABLE", "created_at": now},
+                {"workflow_id": workflow_id, "step_order": 3, "name": "policy_agent", "agent": "policy_agent", "classification": "ASSISTED", "created_at": now},
+                {"workflow_id": workflow_id, "step_order": 4, "name": "risk_agent", "agent": "risk_agent", "classification": "AUTOMATABLE", "created_at": now},
+                {"workflow_id": workflow_id, "step_order": 5, "name": "approval_gate", "agent": "approval_gate", "classification": "HUMAN_REQUIRED", "created_at": now},
+                {"workflow_id": workflow_id, "step_order": 6, "name": "communication_agent", "agent": "communication_agent", "classification": "AUTOMATABLE", "created_at": now},
+                {"workflow_id": workflow_id, "step_order": 7, "name": "verification_agent", "agent": "verification_agent", "classification": "AUTOMATABLE", "created_at": now},
+            ]
+            self._supabase_client.table("workflow_steps").insert(steps).execute()
+
+            # Re-insert ghost skill
+            skill_data = {
+                "workflow_id": workflow_id,
+                "name": "Refund Verification",
+                "definition_json": {
+                    "trigger": "refund_request",
+                    "steps": ["context_agent", "billing_agent", "policy_agent", "risk_agent", "approval_gate", "communication_agent", "verification_agent"],
+                    "approval_rule": {
+                        "field": "refund_amount",
+                        "operator": ">",
+                        "value": 25000,
+                    },
+                },
+                "created_at": now,
+            }
+            self._supabase_client.table("ghost_skills").insert(skill_data).execute()
+
+            logger.info("Demo data reseeded in Supabase")
+        except Exception as e:
+            logger.error(f"Failed to reseed demo data: {e}")
+            # Don't raise, allow tests to continue
 
 
 # Global singleton
