@@ -72,6 +72,9 @@ def run_execution(execution_id: int) -> Dict[str, Any]:
     # Track last executed step for current_step field
     last_executed_step = None
 
+    # Build context that accumulates results from previous steps
+    step_context = {"execution_id": execution_id}
+
     # Execute remaining steps
     for step_def in remaining_steps:
         step_name = step_def.get("name")
@@ -90,9 +93,9 @@ def run_execution(execution_id: int) -> Dict[str, Any]:
         )
 
         try:
-            # Import and run the agent
+            # Import and run the agent, passing accumulated context from previous steps
             agent_module = _import_agent(agent_name)
-            result = agent_module.run(execution, context={"execution_id": execution_id})
+            result = agent_module.run(execution, context=step_context)
 
             status = result.get("status", "SUCCESS")
             output = result.get("result", {})
@@ -109,6 +112,9 @@ def run_execution(execution_id: int) -> Dict[str, Any]:
 
             # Track last executed step
             last_executed_step = step_name
+
+            # Add this step's result to context for subsequent steps
+            step_context[step_name] = {"status": status, "result": output}
 
             if status == "PAUSE":
                 # approval_gate returned PAUSE: transition to WAITING_FOR_APPROVAL and stop

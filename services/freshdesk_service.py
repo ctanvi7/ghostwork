@@ -301,3 +301,126 @@ def add_note(ticket_id: int, body: str) -> dict:
     except requests.RequestException as e:
         logger.error(f"Freshdesk request failed: {str(e)[:100]}")
         raise FreshDeskError(f"Request failed: {str(e)[:100]}") from e
+
+
+def verify_note_exists(ticket_id: int, expected_note_id: Optional[int] = None,
+                       execution_reference: Optional[str] = None) -> dict:
+    """
+    Verify that a note exists on a Freshdesk ticket.
+
+    Fetches ticket conversations and checks if the expected note is present.
+    Matches by note_id if provided, otherwise searches for execution reference.
+
+    Args:
+        ticket_id: Freshdesk ticket ID
+        expected_note_id: Note ID to verify (preferred match)
+        execution_reference: Execution marker to search for (fallback match)
+
+    Returns:
+        Dict with keys: verified (bool), matched_note_id (if found), reason, status
+
+    Raises:
+        FreshDeskUnavailableError: If Freshdesk not configured
+        FreshDeskError: If API call fails
+    """
+    # Check configuration
+    if not Config.FRESHDESK_DOMAIN or not Config.FRESHDESK_API_KEY:
+        logger.warning("Freshdesk not configured for verification")
+        raise FreshDeskUnavailableError("Freshdesk credentials not configured")
+
+    # Fetch ticket with conversations
+    url = f"https://{Config.FRESHDESK_DOMAIN}.freshdesk.com/api/v2/tickets/{ticket_id}?include=conversations"
+
+    try:
+        logger.info(f"Verifying note on ticket {ticket_id}", extra={
+            "ticket_id": ticket_id,
+            "expected_note_id": expected_note_id
+        })
+
+        response = requests.get(
+            url,
+            auth=HTTPBasicAuth(Config.FRESHDESK_API_KEY, "X"),
+            headers={"Content-Type": "application/json"},
+            timeout=(CONNECT_TIMEOUT, READ_TIMEOUT)
+        )
+
+        # Check for authentication/authorization errors
+        if response.status_code == 401:
+            logger.error("Freshdesk authentication failed (401) on verification")
+            raise FreshDeskError("Authentication failed: invalid API key or domain")
+
+        if response.status_code == 403:
+            logger.error("Freshdesk authorization failed (403) on verification")
+            raise FreshDeskError("Authorization failed: insufficient permissions")
+
+        # Check for not found
+        if response.status_code == 404:
+            logger.warning(f"Ticket {ticket_id} not found on Freshdesk (404)")
+            raise FreshDeskError(f"Ticket {ticket_id} not found")
+
+        # Check for server errors
+        if response.status_code >= 500:
+            logger.error(f"Freshdesk server error ({response.status_code}) on verification")
+            raise FreshDeskError(f"Freshdesk server error: {response.status_code}")
+
+        # Check for other errors
+        if not response.ok:
+            logger.error(f"Freshdesk API error ({response.status_code}) on verification: {response.text[:200]}")
+            raise FreshDeskError(f"API error: {response.status_code}")
+
+        # Parse response
+        data = response.json()
+        conversations = data.get("conversations", [])
+
+        # Check if expected note exists
+        matched_note_id = None
+
+        # First, try to match by note_id if provided
+        if expected_note_id:
+            for conv in conversations:
+                if conv.get("id") == expected_note_id:
+                    matched_note_id = expected_note_id
+                    logger.info(f"Verified note {expected_note_id} on ticket {ticket_id}")
+                    return {
+                        "verified": True,
+                        "matched_note_id": matched_note_id,
+                        "ticket_id": ticket_id,
+                        "reason": f"Note {expected_note_id} found",
+                        "status": "verified"
+                    }
+
+        # Second, try to match by execution reference in body
+        if execution_reference:
+            for conv in conversations:
+                body = conv.get("body", "").lower()
+                if execution_reference.lower() in body:
+                    matched_note_id = conv.get("id")
+                    logger.info(f"Verified execution reference on ticket {ticket_id}, note {matched_note_id}")
+                    return {
+                        "verified": True,
+                        "matched_note_id": matched_note_id,
+                        "ticket_id": ticket_id,
+                        "reason": f"Execution reference found in note {matched_note_id}",
+                        "status": "verified"
+                    }
+
+        # No match found
+        logger.warning(f"Verification failed: no matching note on ticket {ticket_id}")
+        return {
+            "verified": False,
+            "matched_note_id": None,
+            "ticket_id": ticket_id,
+            "expected_note_id": expected_note_id,
+            "reason": f"Note not found (expected: {expected_note_id}, ref: {execution_reference})",
+            "status": "verification_failed"
+        }
+
+    except requests.Timeout as e:
+        logger.error(f"Freshdesk API timeout during verification for ticket {ticket_id}")
+        raise FreshDeskError("Freshdesk API timeout (network too slow)") from e
+    except requests.ConnectionError as e:
+        logger.error(f"Freshdesk connection error during verification for ticket {ticket_id}")
+        raise FreshDeskError("Freshdesk connection error (network unavailable)") from e
+    except requests.RequestException as e:
+        logger.error(f"Freshdesk verification request failed: {str(e)[:100]}")
+        raise FreshDeskError(f"Request failed: {str(e)[:100]}") from e
