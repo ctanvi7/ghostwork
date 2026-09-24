@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Execution - GhostWork{% endblock %}
+
+{% block content %}
+<div class="execution-page">
+    <div id="execution-content" class="loading">
+        <p>Loading execution...</p>
+    </div>
+</div>
+
+<script data-execution-id="{{ execution_id }}"></script>
+<script src="{{ url_for('static', filename='js/execution-page.js') }}"></script>
+{% endblock %}

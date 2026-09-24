@@ -191,11 +191,13 @@ def register_blueprints(app: Flask) -> None:
     """Register all blueprints for API routes."""
     from routes.approvals import approvals_bp
     from routes.executions import executions_bp
+    from routes.pages import pages_bp
     from routes.workflows import workflows_bp
 
     app.register_blueprint(executions_bp)
     app.register_blueprint(workflows_bp)
     app.register_blueprint(approvals_bp)
+    app.register_blueprint(pages_bp)
 
 
 def register_health_routes(app: Flask) -> None:

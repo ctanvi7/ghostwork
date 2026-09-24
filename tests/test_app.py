@@ -157,3 +157,36 @@ class TestAppFactory:
 
         assert hasattr(Config, "AUTO_APPROVAL_LIMIT")
         assert Config.AUTO_APPROVAL_LIMIT == Decimal("25000")
+
+
+class TestAPIResponseShapes:
+    """Regression tests for API response shape consistency (Phase 5 CSP fix)."""
+
+    def test_workflows_list_returns_workflows_property(self, client):
+        """GET /api/workflows returns response with 'workflows' property."""
+        response = client.get("/api/workflows")
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert "workflows" in data
+        assert isinstance(data["workflows"], list)
+        # Should have the seeded Refund Verification workflow
+        assert len(data["workflows"]) == 1
+        assert data["workflows"][0]["name"] == "Refund Verification"
+
+    def test_workflow_detail_returns_workflow_property(self, client):
+        """GET /api/workflows/<id> returns response with 'workflow' property."""
+        response = client.get("/api/workflows/1")
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert "workflow" in data
+        assert "steps" in data
+        assert isinstance(data["workflow"], dict)
+        assert isinstance(data["steps"], list)
+        assert data["workflow"]["name"] == "Refund Verification"
+
+    def test_workflow_detail_not_found(self, client):
+        """GET /api/workflows/<id> returns 404 for missing workflow."""
+        response = client.get("/api/workflows/999")
+        assert response.status_code == 404
+        data = json.loads(response.data)
+        assert "error" in data

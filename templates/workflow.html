@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Workflow - GhostWork{% endblock %}
+
+{% block content %}
+<div class="workflow-page">
+    <div id="workflow-content" class="loading">
+        <p>Loading workflow...</p>
+    </div>
+</div>
+
+<script data-workflow-id="{{ workflow_id }}"></script>
+<script src="{{ url_for('static', filename='js/workflow.js') }}"></script>
+{% endblock %}

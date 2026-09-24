@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - GhostWork{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <section class="section">
+        <h2>Discovered Workflows</h2>
+        <div id="workflows-list" class="workflows-grid">
+            <div class="workflow-card loading">
+                <p>Loading workflows...</p>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}
