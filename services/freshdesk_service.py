@@ -219,3 +219,85 @@ def extract_invoice_id(ticket: FreshDeskTicket) -> Optional[str]:
         return f"INV-{invoice_matches[0]}"
 
     return None
+
+
+def add_note(ticket_id: int, body: str) -> dict:
+    """
+    Add a note to a Freshdesk ticket.
+
+    Args:
+        ticket_id: Freshdesk ticket ID
+        body: Note content (text)
+
+    Returns:
+        Dict with keys: status ("success" or "error"), note_id (if success), error_message
+
+    Raises:
+        FreshDeskUnavailableError: If Freshdesk not configured
+        FreshDeskError: If API call fails
+    """
+    # Check configuration
+    if not Config.FRESHDESK_DOMAIN or not Config.FRESHDESK_API_KEY:
+        logger.warning("Freshdesk not configured for write-back")
+        raise FreshDeskUnavailableError("Freshdesk credentials not configured")
+
+    url = f"https://{Config.FRESHDESK_DOMAIN}.freshdesk.com/api/v2/tickets/{ticket_id}/notes"
+
+    try:
+        logger.info(f"Adding note to ticket {ticket_id}", extra={
+            "freshdesk_domain": Config.FRESHDESK_DOMAIN,
+            "ticket_id": ticket_id
+        })
+
+        response = requests.post(
+            url,
+            auth=HTTPBasicAuth(Config.FRESHDESK_API_KEY, "X"),
+            headers={"Content-Type": "application/json"},
+            json={"body": body},
+            timeout=(CONNECT_TIMEOUT, READ_TIMEOUT)
+        )
+
+        # Check for authentication/authorization errors
+        if response.status_code == 401:
+            logger.error("Freshdesk authentication failed (401) on note creation")
+            raise FreshDeskError("Authentication failed: invalid API key or domain")
+
+        if response.status_code == 403:
+            logger.error("Freshdesk authorization failed (403) on note creation")
+            raise FreshDeskError("Authorization failed: insufficient permissions")
+
+        # Check for not found
+        if response.status_code == 404:
+            logger.warning(f"Ticket {ticket_id} not found on Freshdesk (404)")
+            raise FreshDeskError(f"Ticket {ticket_id} not found")
+
+        # Check for server errors
+        if response.status_code >= 500:
+            logger.error(f"Freshdesk server error ({response.status_code}) on note creation")
+            raise FreshDeskError(f"Freshdesk server error: {response.status_code}")
+
+        # Check for other errors
+        if not response.ok:
+            logger.error(f"Freshdesk API error ({response.status_code}) on note creation: {response.text[:200]}")
+            raise FreshDeskError(f"API error: {response.status_code}")
+
+        # Parse response
+        data = response.json()
+        note_id = data.get("id")
+        logger.info(f"Successfully added note {note_id} to ticket {ticket_id}")
+
+        return {
+            "status": "success",
+            "note_id": note_id,
+            "ticket_id": ticket_id
+        }
+
+    except requests.Timeout as e:
+        logger.error(f"Freshdesk API timeout for ticket {ticket_id}")
+        raise FreshDeskError("Freshdesk API timeout (network too slow)") from e
+    except requests.ConnectionError as e:
+        logger.error(f"Freshdesk connection error for ticket {ticket_id}")
+        raise FreshDeskError("Freshdesk connection error (network unavailable)") from e
+    except requests.RequestException as e:
+        logger.error(f"Freshdesk request failed: {str(e)[:100]}")
+        raise FreshDeskError(f"Request failed: {str(e)[:100]}") from e
