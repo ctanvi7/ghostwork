@@ -1,18 +1,47 @@
 """Context agent: extracts structured context from ticket using Freshdesk + Claude."""
 
 import logging
+from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, Optional
 
+from config import Config
 from services.claude_service import extract_ticket_context
 from services.freshdesk_service import (
     FreshDeskError,
     FreshDeskUnavailableError,
     extract_invoice_id,
     extract_refund_amount,
+    get_last_provider_used,
     get_ticket,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _deterministic_refund_amount(freshdesk_ticket) -> Optional[Decimal]:
+    """Refund amount from the structured Freshdesk custom field only (never regex/LLM)."""
+    value = (freshdesk_ticket.custom_fields or {}).get(Config.FRESHDESK_REFUND_AMOUNT_FIELD)
+    if value is None:
+        return None
+    try:
+        amount = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+    return amount if amount.is_finite() and amount > 0 else None
+
+
+def _apply_refund_amount(execution: Dict[str, Any], freshdesk_ticket) -> str:
+    """Fill a missing execution refund_amount from Freshdesk; return where the amount came from."""
+    if execution.get("refund_amount") is not None:
+        return "request"
+    amount = _deterministic_refund_amount(freshdesk_ticket)
+    if amount is None:
+        return "missing"
+    execution["refund_amount"] = float(amount)
+    if execution.get("id"):
+        from services.supabase_service import get_service
+        get_service().update_execution(execution["id"], refund_amount=float(amount))
+    return "freshdesk_custom_field"
 
 
 def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -33,6 +62,8 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
         freshdesk_ticket = None
         ticket_text = execution.get("ticket_text", "Support ticket request")
         source = "fallback"
+        provider = None
+        freshdesk_error = None
 
         if ticket_id:
             try:
@@ -40,10 +71,12 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
                 # Combine subject and description for Claude
                 ticket_text = f"Subject: {freshdesk_ticket.subject}\n\n{freshdesk_ticket.description_text}"
                 source = "freshdesk"
+                provider = get_last_provider_used()
 
                 logger.info(f"Fetched ticket {ticket_id} from Freshdesk", extra={
                     "ticket_id": ticket_id,
-                    "source": source
+                    "source": source,
+                    "provider": provider,
                 })
 
             except FreshDeskUnavailableError:
@@ -52,6 +85,7 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
             except FreshDeskError as e:
                 logger.warning(f"Freshdesk fetch failed for ticket {ticket_id}: {e}, using fallback")
                 source = "fallback_error"
+                freshdesk_error = str(e)[:120]
 
         # Step 2: Extract structured context using Claude
         ticket_context = extract_ticket_context(ticket_text)
@@ -77,15 +111,29 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
             f"confidence={ticket_context.confidence_score}, source={source}"
         )
 
-        return {
-            "status": "SUCCESS",
-            "result": {
-                "reason": "Context extracted from ticket",
-                "context": context_dict,
-                "confidence": ticket_context.confidence_score,
-                "source": source
-            }
+        result = {
+            "reason": "Context extracted from ticket",
+            "context": context_dict,
+            "confidence": ticket_context.confidence_score,
+            "source": source,
         }
+
+        if freshdesk_ticket:
+            result["reason"] = f"Context extracted from Freshdesk ticket #{freshdesk_ticket.ticket_id}"
+            result["provider"] = provider
+            result["refund_amount_source"] = _apply_refund_amount(execution, freshdesk_ticket)
+            # Only non-personal ticket metadata, so the UI can prove the real source.
+            result["ticket"] = {
+                "ticket_id": freshdesk_ticket.ticket_id,
+                "subject": freshdesk_ticket.subject,
+                "priority": freshdesk_ticket.priority,
+                "status": (freshdesk_ticket.raw_response or {}).get("status"),
+                "url": Config.freshdesk_ticket_url(freshdesk_ticket.ticket_id),
+            }
+        elif freshdesk_error:
+            result["freshdesk_error"] = freshdesk_error
+
+        return {"status": "SUCCESS", "result": result}
 
     except Exception as e:
         logger.error(f"Context extraction failed: {e}")

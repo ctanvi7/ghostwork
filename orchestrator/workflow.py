@@ -1,5 +1,6 @@
 """Workflow execution orchestrator."""
 
+import json
 import logging
 from typing import Any, Dict
 
@@ -57,6 +58,10 @@ def run_execution(execution_id: int) -> Dict[str, Any]:
 
     # Find the last successful step
     execution_steps = service.get_execution_steps(execution_id)
+    order_by_name = {step["name"]: step["step_order"] for step in all_steps}
+    for recorded_step in execution_steps:
+        if recorded_step.get("step_order") is None:
+            recorded_step["step_order"] = order_by_name.get(recorded_step.get("step_name"), 0)
     last_success = None
     if execution_steps:
         successful = [s for s in execution_steps if s.get("status") == "SUCCESS"]
@@ -72,8 +77,19 @@ def run_execution(execution_id: int) -> Dict[str, Any]:
     # Track last executed step for current_step field
     last_executed_step = None
 
-    # Build context that accumulates results from previous steps
+    # Build context that accumulates results from previous steps. On resume
+    # (after approval) rehydrate it from steps that already succeeded, so later
+    # agents still see e.g. that the ticket came from Freshdesk.
     step_context = {"execution_id": execution_id}
+    for prior in sorted(execution_steps or [], key=lambda s: s.get("step_order", 0)):
+        if prior.get("status") == "SUCCESS" and prior.get("step_order", 0) <= resume_order:
+            output = prior.get("output_json") or {}
+            if isinstance(output, str):
+                try:
+                    output = json.loads(output)
+                except ValueError:
+                    output = {}
+            step_context[prior.get("step_name")] = {"status": "SUCCESS", "result": output}
 
     # Look up associated GhostSkill and seed approval limit
     skill = service.get_ghost_skill_for_workflow(workflow_id)
@@ -97,14 +113,25 @@ def run_execution(execution_id: int) -> Dict[str, Any]:
 
         logger.info(f"Execution {execution_id}: executing step {step_order} ({step_name})")
 
-        # Create execution_step record
-        step_id = service.create_execution_step(
-            execution_id=execution_id,
-            step_name=step_name,
-            agent=agent_name,
-            status="RUNNING",
-            step_order=step_order
-        )
+        # Create execution_step record. A persistence failure here must mark the
+        # run FAILED; otherwise it stays RUNNING and blocks new runs for the ticket.
+        try:
+            step_id = service.create_execution_step(
+                execution_id=execution_id,
+                step_name=step_name,
+                agent=agent_name,
+                status="RUNNING",
+                step_order=step_order
+            )
+        except Exception as e:
+            logger.error(f"Execution {execution_id}: could not record step {step_name}: {e}")
+            try:
+                transition(execution_id, "RUNNING", "FAILED",
+                           error_message=f"Could not record step {step_name}: {str(e)[:200]}",
+                           current_step=last_executed_step or step_name)
+            except Exception as te:
+                logger.error(f"Failed to mark execution as FAILED: {te}")
+            return service.get_execution(execution_id)
 
         try:
             # Import and run the agent, passing accumulated context from previous steps
@@ -195,5 +222,8 @@ def _import_agent(agent_name: str):
     elif agent_name == "verification_agent":
         from agents import verification_agent
         return verification_agent
+    elif agent_name == "closure_agent":
+        from agents import closure_agent
+        return closure_agent
     else:
         raise ValueError(f"Unknown agent: {agent_name}")

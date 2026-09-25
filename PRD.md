@@ -60,9 +60,11 @@ Expected flow:
 - Optional: trigger GhostWork from a Freshdesk webhook/event.
 
 ### F2. Workflow Discovery
-- Ingest privacy-safe activity events.
-- Group events into ordered sequences.
-- Detect recurring patterns using deterministic sequence matching/counting.
+- Read Open/Pending Freshdesk ticket metadata (no message bodies).
+- Group tickets into recurring patterns using deterministic keyword rules.
+- Decide per pattern whether automation is possible (an approved playbook exists);
+  otherwise route each ticket to a human with a private Freshdesk note.
+- Fallback: detect recurring sequences in privacy-safe activity events.
 - Label/interpret the discovered pattern using Claude where useful.
 
 ### F3. GhostScore
@@ -134,12 +136,14 @@ Use Claude for semantic tasks only:
 
 Claude must not be allowed to override deterministic enterprise controls.
 
-### F11. Verification
+### F11. Verification and Closure
 After execution:
 - Re-fetch Freshdesk ticket.
 - Verify status/note/reply.
 - Verify approval record exists.
 - Mark execution VERIFIED only after checks pass.
+- Close the Freshdesk ticket only after all checks pass, then re-read it to
+  confirm it is Closed (configurable with `FRESHDESK_AUTO_CLOSE`).
 
 ### F12. Impact Dashboard
 Show prototype/demo metrics such as:
@@ -198,10 +202,10 @@ Out of scope for MVP:
 
 ## 9. User Flow
 ### Discovery
-Dashboard → Discovery → Select Refund Verification → GhostGraph → GhostScore → Generate GhostSkill
+Dashboard → Discovery (live Freshdesk patterns) → per ticket: Run automation (AUTOMATE) or Route to human (HUMAN_REVIEW) → Explore → GhostGraph → GhostScore
 
 ### Execution
-Run GhostSkill → Agents execute → Risk Agent pauses → Human approval → Resume → Freshdesk update → Verify → Impact
+Run GhostSkill → Agents execute → Risk Agent pauses → Human approval → Resume → Freshdesk update → Verify → Close ticket → Impact
 
 ## 10. Success Criteria
 A successful hackathon prototype must demonstrate end-to-end:

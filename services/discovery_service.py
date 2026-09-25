@@ -215,28 +215,69 @@ def _label_workflow(signature: List[str]) -> str:
     return " → ".join(tools)
 
 
+def _discover_from_events(events, filepath, min_frequency) -> List[Dict[str, Any]]:
+    workflows = discover_workflows(events, filepath, min_frequency)
+    normalized = [normalize_discovered_workflow(w) for w in workflows]
+    normalized.sort(key=lambda w: w["ghost_score"], reverse=True)
+    return normalized
+
+
+def discover(
+    events: Optional[List[Dict[str, Any]]] = None,
+    filepath: Optional[str] = None,
+    min_frequency: int = 2
+) -> Dict[str, Any]:
+    """
+    Discover patterns and report which data source was used.
+
+    Live Freshdesk tickets are the primary source. If Freshdesk is unavailable
+    (or events are passed in explicitly), the synthetic activity events are used.
+
+    Returns: {"source", "workflows", "total_items", "fallback_reason"}
+    """
+    from services.freshdesk_service import FreshDeskError, FreshDeskUnavailableError
+    from services.ticket_discovery_service import discover_ticket_patterns, fetch_unresolved_tickets
+
+    fallback_reason = None
+    if events is None and filepath is None:
+        try:
+            tickets = fetch_unresolved_tickets()
+            return {
+                "source": "freshdesk",
+                "workflows": discover_ticket_patterns(tickets, min_frequency),
+                "total_items": len(tickets),
+                "fallback_reason": None,
+            }
+        except FreshDeskUnavailableError:
+            fallback_reason = "Freshdesk not configured"
+        except FreshDeskError as e:
+            fallback_reason = f"Freshdesk read failed: {str(e)[:100]}"
+            logger.warning(f"Discovery falling back to activity events: {e}")
+
+    if events is None:
+        events = load_activity_events(filepath)
+    return {
+        "source": "activity_events",
+        "workflows": _discover_from_events(events, None, min_frequency),
+        "total_items": len(group_events_by_session(events)),
+        "fallback_reason": fallback_reason,
+    }
+
+
 def get_discovered_workflows(
     events: Optional[List[Dict[str, Any]]] = None,
     filepath: Optional[str] = None,
     min_frequency: int = 2
 ) -> List[Dict[str, Any]]:
     """
-    Get all discovered workflows sorted by GhostScore descending.
+    Get all discovered workflows (Freshdesk tickets first, activity events as fallback).
 
     Args:
-        events: Raw activity events (if None, loaded from file)
+        events: Raw activity events (if given, Freshdesk is not queried)
         filepath: Path to activity events JSON
         min_frequency: Minimum number of repetitions to consider a pattern
 
     Returns:
         List of normalized discovered workflows with GhostScore
     """
-    workflows = discover_workflows(events, filepath, min_frequency)
-
-    # Normalize and calculate GhostScore
-    normalized = [normalize_discovered_workflow(w) for w in workflows]
-
-    # Sort by GhostScore descending
-    normalized.sort(key=lambda w: w["ghost_score"], reverse=True)
-
-    return normalized
+    return discover(events, filepath, min_frequency)["workflows"]

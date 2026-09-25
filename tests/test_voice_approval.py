@@ -31,7 +31,8 @@ def _start_voice(client, monkeypatch, execution_id):
 
     urls = {}
 
-    def fake_call(answer_url, hangup_url):
+    def fake_call(answer_url, hangup_url, to_number):
+        urls["to"] = to_number
         urls["answer"] = answer_url
         urls["hangup"] = hangup_url
         return "call-test-1"

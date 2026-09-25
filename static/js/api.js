@@ -54,6 +54,10 @@ const api = (() => {
             return request('POST', '/executions', data);
         },
 
+        handoffTicket(ticketId) {
+            return request('POST', `/discovery/tickets/${ticketId}/handoff`);
+        },
+
         getExecution(id) {
             return request('GET', `/executions/${id}`);
         },

@@ -272,6 +272,33 @@
     margin-bottom: var(--space-lg);
 }
 
+.source-section[data-source="freshdesk"] {
+    border-left: 4px solid var(--color-primary);
+}
+
+.source-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+}
+
+.source-subject {
+    grid-column: 1 / -1;
+}
+
+.source-label {
+    display: block;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.source-link {
+    display: inline-block;
+}
+
 .metrics-detail {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -781,4 +808,49 @@
     .integrations-grid {
         grid-template-columns: repeat(2, 1fr);
     }
+}
+
+/* Discovery: automation decision and per-ticket actions */
+.discovery-source {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-light);
+    margin-bottom: var(--space-md);
+}
+
+.card-decision {
+    margin-top: var(--space-md);
+}
+
+.decision-reason {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-light);
+    margin-top: var(--space-xs);
+}
+
+.ticket-list {
+    list-style: none;
+    margin: var(--space-md) 0 0;
+    padding: 0;
+    border-top: 1px solid var(--color-border);
+}
+
+.ticket-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding: var(--space-sm) 0;
+    border-bottom: 1px solid var(--color-border);
+    font-size: var(--font-size-xs);
+}
+
+.ticket-subject {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ticket-status {
+    color: var(--color-text-light);
+    white-space: nowrap;
 }

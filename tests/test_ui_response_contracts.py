@@ -83,9 +83,14 @@ class TestIntegrationsAPIContract:
         actual_keys = set(configured.keys())
         assert expected_keys.issubset(actual_keys)
 
-        # All values should be booleans
+        # All values should be booleans (except freshdesk which is a dict)
         for key, value in configured.items():
-            assert isinstance(value, bool), f"{key} value should be boolean, got {type(value)}"
+            if key == "freshdesk":
+                assert isinstance(value, dict), f"{key} should be a dict with configured and provider"
+                assert "configured" in value
+                assert "provider" in value
+            else:
+                assert isinstance(value, bool), f"{key} value should be boolean, got {type(value)}"
 
     def test_integrations_claude_configured_demo(self, client):
         """In demo, Claude should be configured (true)."""
@@ -101,7 +106,7 @@ class TestIntegrationsAPIContract:
         data = response.get_json()
 
         # Freshdesk should be disabled in demo without credentials
-        assert data["configured"]["freshdesk"] is False
+        assert data["configured"]["freshdesk"]["configured"] is False
 
     def test_integrations_sarvam_configured_when_key_present(self, client, monkeypatch):
         """Sarvam should be configured (true) when SARVAM_API_KEY is set."""
@@ -124,10 +129,26 @@ class TestIntegrationsAPIContract:
         assert data["configured"]["sarvam"] is False
 
     def test_integrations_no_credentials_exposed(self, client):
-        """Response does not contain any sensitive credentials."""
+        """Response does not contain any sensitive credential VALUES.
+
+        Note: freshdesk.missing_config may list fixed, non-secret env VAR
+        NAMES (e.g. "MCP_FRESHDESK_AUTH_TOKEN") as a safe debugging aid -
+        the name of a variable is not the secret it holds. That field is
+        excluded from the blanket word-scan below; everything else in the
+        response must still contain none of these words.
+        """
         response = client.get("/api/integrations")
         data = response.get_json()
-        response_text = str(data).lower()
+
+        # missing_config only ever contains fixed variable-name strings from
+        # config.py, never a value read from the environment.
+        sanitized = dict(data)
+        freshdesk = sanitized.get("configured", {}).get("freshdesk")
+        if isinstance(freshdesk, dict) and "missing_config" in freshdesk:
+            freshdesk = {k: v for k, v in freshdesk.items() if k != "missing_config"}
+            sanitized["configured"] = {**sanitized["configured"], "freshdesk": freshdesk}
+
+        response_text = str(sanitized).lower()
 
         # Should not contain any credential-related strings
         forbidden_strings = ["key", "secret", "password", "token", "credential"]

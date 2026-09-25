@@ -51,9 +51,10 @@ class MemoryStore:
                 {"id": 5, "workflow_id": 1, "step_order": 5, "name": "approval_gate", "agent": "approval_gate", "classification": "HUMAN_REQUIRED", "created_at": datetime.now(timezone.utc).isoformat()},
                 {"id": 6, "workflow_id": 1, "step_order": 6, "name": "communication_agent", "agent": "communication_agent", "classification": "AUTOMATABLE", "created_at": datetime.now(timezone.utc).isoformat()},
                 {"id": 7, "workflow_id": 1, "step_order": 7, "name": "verification_agent", "agent": "verification_agent", "classification": "AUTOMATABLE", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": 8, "workflow_id": 1, "step_order": 8, "name": "closure_agent", "agent": "closure_agent", "classification": "AUTOMATABLE", "created_at": datetime.now(timezone.utc).isoformat()},
             ]
             self.tables["workflow_steps"].extend(steps)
-            self._id_counters["workflow_steps"] = 7
+            self._id_counters["workflow_steps"] = 8
 
             # Ghost skills
             skill = {

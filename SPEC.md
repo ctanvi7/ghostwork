@@ -236,9 +236,16 @@ No downstream action may execute while status is WAITING_FOR_APPROVAL.
 
 `GET /api/workflows/<id>`
 
-`POST /api/discover`
-- input: event dataset
-- output: discovered workflows
+### Discovery
+`GET /api/discovery/workflows?min_frequency=1`
+- output: ticket patterns from live Freshdesk (fallback: activity events), each with
+  `automation.decision` = `AUTOMATE` or `HUMAN_REVIEW`, plus `source` and `fallback_reason`
+
+`POST /api/discovery/workflows` with `{"events": [...]}` discovers from an uploaded event dataset.
+
+`POST /api/discovery/tickets/<ticket_id>/handoff`
+- routes a HUMAN_REVIEW ticket to a human: private Freshdesk note, then read-back
+- idempotent; refuses tickets that are not Open/Pending
 
 ### GhostSkills
 `POST /api/skills/generate`
@@ -250,9 +257,12 @@ No downstream action may execute while status is WAITING_FOR_APPROVAL.
 ```json
 {
   "workflow_id": 1,
-  "ticket_id": 2048
+  "ticket_id": 3
 }
 ```
+`ticket_id` defaults to `FRESHDESK_DEMO_TICKET_ID`. When Freshdesk is live, the
+server refuses (409) a ticket that is not Open/Pending or whose discovered
+pattern belongs to a different playbook.
 
 `GET /api/executions/<id>`
 
@@ -271,11 +281,16 @@ No downstream action may execute while status is WAITING_FOR_APPROVAL.
 
 ## 8. Freshdesk Integration
 ### Required operations
-1. Fetch ticket
-2. Fetch ticket conversations if needed
-3. Update ticket
-4. Add note or reply
-5. Re-fetch ticket for verification
+1. Search unresolved tickets for discovery (`status:2 OR status:3`, metadata only)
+2. Fetch ticket
+3. Fetch ticket conversations (note read-back)
+4. Add private note
+5. Update ticket status (close after verified automation)
+6. Re-fetch ticket for verification
+
+Transport: Freshdesk MCP (JSON-RPC over HTTP) is primary; REST v2 is the fallback.
+The search index lags live changes by a few minutes, so per-ticket checks
+re-read the ticket directly when it is missing from search results.
 
 ### Internal normalized ticket
 ```json
@@ -353,15 +368,26 @@ Resume or stop workflow
 - Ambiguous speech → ask again.
 
 ## 12. Workflow Discovery
-Use deterministic sequence grouping for MVP.
+Primary source: live Freshdesk tickets (`services/ticket_discovery_service.py`).
 
 Algorithm:
-1. Group events by case/work item.
-2. Sort by timestamp.
-3. Build sequence signature.
-4. Count repeated signatures.
-5. Rank by frequency.
-6. Optionally use Claude to assign a business label.
+1. Search Open/Pending tickets; keep metadata only (subject, type, tags, status).
+2. Classify each ticket with deterministic keyword rules.
+3. Tickets in the same category form a pattern; frequency = ticket count.
+4. Decide per pattern: `AUTOMATE` only if an approved playbook exists
+   (today: refund -> Refund Verification); otherwise `HUMAN_REVIEW`.
+5. Rank repeating patterns first, then by GhostScore.
+
+Fallback (Freshdesk unavailable): deterministic sequence grouping over
+`data/activity_events.json` (group by session, sort, build signature, count).
+
+## 12a. Refund Verification Steps
+context -> billing -> policy -> risk -> approval_gate -> communication ->
+verification -> closure. The closure agent closes the ticket only when every
+earlier step succeeded, any required approval exists, the note was written and
+read back, and the ticket is still Open/Pending; it then re-reads the ticket to
+confirm it is Closed. Write-back is skipped if the ticket was resolved/closed
+while waiting for approval.
 
 No advanced process-mining framework is required.
 
@@ -414,12 +440,19 @@ FLASK_SECRET_KEY=
 SUPABASE_URL=
 SUPABASE_KEY=
 ANTHROPIC_API_KEY=
+FRESHDESK_PROVIDER=mcp
+MCP_FRESHDESK_URL=
+MCP_FRESHDESK_AUTH_TOKEN=
 FRESHDESK_DOMAIN=
 FRESHDESK_API_KEY=
+FRESHDESK_DEMO_TICKET_ID=
+FRESHDESK_AUTO_CLOSE=true
 SARVAM_API_KEY=
 VOBIZ_API_KEY=
 VOBIZ_FROM_NUMBER=
-APPROVER_PHONE=
+APPROVER_PHONE=            # fallback only; the ticket assignee is called
+VOBIZ_DEFAULT_COUNTRY_CODE=91
+PUBLIC_BASE_URL=
 ```
 
 Never commit `.env`.

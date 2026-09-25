@@ -55,7 +55,6 @@ def test_vobiz_call_uses_authenticated_api_and_validates_id(monkeypatch):
     monkeypatch.setattr(Config, "VOBIZ_AUTH_ID", "test-id")
     monkeypatch.setattr(Config, "VOBIZ_AUTH_TOKEN", "test-token")
     monkeypatch.setattr(Config, "VOBIZ_FROM_NUMBER", "+911111111111")
-    monkeypatch.setattr(Config, "APPROVER_PHONE", "+912222222222")
     monkeypatch.setattr(Config, "PUBLIC_BASE_URL", "https://demo.example.org")
     calls = []
 
@@ -64,14 +63,16 @@ def test_vobiz_call_uses_authenticated_api_and_validates_id(monkeypatch):
         return FakeResponse({"request_uuid": "call-123"})
 
     monkeypatch.setattr(vobiz_service.requests, "post", fake_post)
-    assert vobiz_service.place_approval_call("https://demo.example.org/answer", "https://demo.example.org/hangup") == "call-123"
+    assert vobiz_service.place_approval_call(
+        "https://demo.example.org/answer", "https://demo.example.org/hangup", "+912222222222") == "call-123"
     assert calls[0][1]["headers"]["X-Auth-ID"] == "test-id"
     assert calls[0][1]["json"]["to"] == "+912222222222"
     assert "timeout" in calls[0][1]
 
     monkeypatch.setattr(vobiz_service.requests, "post", lambda *args, **kwargs: FakeResponse({}))
     with pytest.raises(vobiz_service.VobizError):
-        vobiz_service.place_approval_call("https://demo.example.org/answer", "https://demo.example.org/hangup")
+        vobiz_service.place_approval_call(
+            "https://demo.example.org/answer", "https://demo.example.org/hangup", "+912222222222")
 
 
 def test_recording_download_rejects_untrusted_hosts_and_redirects(monkeypatch):

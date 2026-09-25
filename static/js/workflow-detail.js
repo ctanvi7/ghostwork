@@ -40,6 +40,15 @@ function renderWorkflowDetail(w) {
     // GhostScore Breakdown
     renderBreakdown(w.ghost_score_breakdown);
 
+    // Automation decision is made server-side (deterministic playbook check)
+    if (w.automation) {
+        document.getElementById('decision-label').innerHTML =
+            `<span class="risk-badge ${w.automation.automatable ? 'risk-low' : 'risk-medium'}">` +
+            `${w.automation.automatable ? 'Automatable' : 'Human review'}</span>`;
+        document.getElementById('decision-reason').textContent = w.automation.reason;
+        document.getElementById('decision-section').classList.remove('hidden');
+    }
+
     // Autonomy Boundary (Refund Verification only)
     if (w.name.toLowerCase().includes('refund')) {
         document.getElementById('autonomy-section').classList.remove('hidden');

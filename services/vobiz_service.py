@@ -13,9 +13,12 @@ class VobizError(Exception):
     """Vobiz call or recording operation failed."""
 
 
-def place_approval_call(answer_url: str, hangup_url: str) -> str:
+def place_approval_call(answer_url: str, hangup_url: str, to_number: str) -> str:
+    """Ask Vobiz to dial to_number (resolved by approver_service). Returns the call ID."""
     if not Config.voice_call_configured():
-        raise VobizError("Vobiz requires auth ID, auth token, phone numbers, and public HTTPS URL")
+        raise VobizError("Vobiz requires auth ID, auth token, caller ID, and public HTTPS URL")
+    if not to_number:
+        raise VobizError("No approver number to call")
     try:
         response = requests.post(
             f"https://api.vobiz.ai/api/v1/Account/{Config.VOBIZ_AUTH_ID}/Call/",
@@ -25,7 +28,7 @@ def place_approval_call(answer_url: str, hangup_url: str) -> str:
             },
             json={
                 "from": Config.VOBIZ_FROM_NUMBER,
-                "to": Config.APPROVER_PHONE,
+                "to": to_number,
                 "answer_url": answer_url,
                 "answer_method": "POST",
                 "hangup_url": hangup_url,

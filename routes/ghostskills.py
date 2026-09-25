@@ -4,6 +4,7 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
+from config import Config
 from app import InvalidStateError, NotFoundError, ValidationError
 from orchestrator.workflow import run_execution
 from services.discovery_service import get_discovered_workflows
@@ -36,7 +37,7 @@ def generate_skill(workflow_id: int):
     service = get_service()
 
     # Fetch discovered workflows
-    discovered_workflows = get_discovered_workflows()
+    discovered_workflows = get_discovered_workflows(min_frequency=1)
 
     # Find the workflow matching workflow_id
     discovered = None
@@ -139,7 +140,7 @@ def execute_skill(skill_id: int):
     if not data:
         raise ValidationError("Request body required")
 
-    ticket_id = data.get("ticket_id")
+    ticket_id = data.get("ticket_id") or Config.FRESHDESK_DEMO_TICKET_ID
     refund_amount = data.get("refund_amount")
 
     if refund_amount is None:

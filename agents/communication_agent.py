@@ -1,6 +1,7 @@
 """Communication agent: handles Freshdesk write-back after approval."""
 
 import logging
+from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, Optional
 
 from config import Config
@@ -8,9 +9,37 @@ from services.freshdesk_service import (
     FreshDeskError,
     FreshDeskUnavailableError,
     add_note,
+    get_last_provider_used,
+    get_ticket,
 )
 
 logger = logging.getLogger(__name__)
+
+# Freshdesk statuses after which GhostWork must not write to the ticket.
+TICKET_DONE_STATUSES = {4: "Resolved", 5: "Closed"}
+
+
+def _freshdesk_configured() -> bool:
+    """Config check for the provider actually selected (MCP or REST)."""
+    if Config.FRESHDESK_PROVIDER == "mcp":
+        return bool(Config.MCP_FRESHDESK_URL and Config.MCP_FRESHDESK_AUTH_TOKEN)
+    return bool(Config.FRESHDESK_DOMAIN and Config.FRESHDESK_API_KEY)
+
+
+def _step_result(context: Optional[Dict[str, Any]], step_name: str) -> Dict[str, Any]:
+    return ((context or {}).get(step_name) or {}).get("result") or {}
+
+
+def _approval_required(execution: Dict[str, Any], context: Optional[Dict[str, Any]]) -> bool:
+    """Deterministic: the risk_agent decision, else the global limit (fail closed)."""
+    risk = _step_result(context, "risk_agent")
+    if "requires_approval" in risk:
+        return bool(risk["requires_approval"])
+    try:
+        amount = Decimal(str(execution.get("refund_amount")))
+    except (InvalidOperation, TypeError, ValueError):
+        return True
+    return not amount.is_finite() or amount <= 0 or amount > Config.AUTO_APPROVAL_LIMIT
 
 
 def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -29,7 +58,8 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
     """
     try:
         ticket_id = execution.get("ticket_id")
-        source = execution.get("source", "fallback")
+        # The context_agent result is the source of truth for where the ticket came from.
+        source = _step_result(context, "context_agent").get("source") or execution.get("source", "fallback")
 
         # Only attempt write-back if this was a real Freshdesk ticket
         if source != "freshdesk":
@@ -56,8 +86,25 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
                 }
             }
 
+        # Governance: never write to Freshdesk unless a required approval exists.
+        execution_id = execution.get("id")
+        if execution_id and _approval_required(execution, context):
+            from services.supabase_service import get_service
+            if not get_service().get_approved_approval(execution_id):
+                logger.warning(f"Blocked Freshdesk write-back for execution {execution_id}: no approval")
+                return {
+                    "status": "SUCCESS",
+                    "result": {
+                        "reason": "Write-back blocked: required human approval not granted",
+                        "action_performed": False,
+                        "ticket_id": ticket_id,
+                        "source": source,
+                        "writeback_status": "blocked_no_approval"
+                    }
+                }
+
         # Check if Freshdesk is configured
-        if not Config.FRESHDESK_DOMAIN or not Config.FRESHDESK_API_KEY:
+        if not _freshdesk_configured():
             logger.info("Freshdesk not configured, using fallback communication mode")
             return {
                 "status": "SUCCESS",
@@ -72,23 +119,39 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
 
         # Construct the note content
         refund_amount = execution.get("refund_amount")
-        execution_id = execution.get("execution_id")
-
-        note_body = _build_note_content(refund_amount, execution_id)
+        note_body = _build_note_content(refund_amount, execution.get("execution_id") or execution_id)
 
         # Attempt to add note to Freshdesk ticket
         try:
+            # A human may have resolved/closed the ticket while it waited for approval.
+            current_status = (get_ticket(ticket_id).raw_response or {}).get("status")
+            if current_status in TICKET_DONE_STATUSES:
+                logger.warning(f"Ticket {ticket_id} is {TICKET_DONE_STATUSES[current_status]}; not writing note")
+                return {
+                    "status": "SUCCESS",
+                    "result": {
+                        "reason": f"Write-back skipped: ticket #{ticket_id} was already "
+                                  f"{TICKET_DONE_STATUSES[current_status]} in Freshdesk",
+                        "action_performed": False,
+                        "ticket_id": ticket_id,
+                        "source": source,
+                        "writeback_status": "skipped_ticket_closed"
+                    }
+                }
+
             result = add_note(ticket_id, note_body)
-            logger.info(f"Freshdesk write-back successful for ticket {ticket_id}")
+            provider = get_last_provider_used()
+            logger.info(f"Freshdesk write-back successful for ticket {ticket_id} via {provider}")
 
             return {
                 "status": "SUCCESS",
                 "result": {
-                    "reason": "Freshdesk note created",
+                    "reason": f"Freshdesk note {result.get('note_id')} added to ticket #{ticket_id} via {provider}",
                     "action_performed": True,
                     "ticket_id": ticket_id,
                     "note_id": result.get("note_id"),
                     "source": source,
+                    "provider": provider,
                     "writeback_status": "success",
                     "external_reference": f"freshdesk-note-{result.get('note_id')}"
                 }

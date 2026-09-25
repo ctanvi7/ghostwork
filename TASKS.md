@@ -12,12 +12,14 @@
 - [ ] Build minimal execution UI
 
 ## P0 — Freshworks
-- [ ] Connect Freshdesk sandbox
-- [ ] Fetch ticket
-- [ ] Normalize ticket into GhostWork model
-- [ ] Update ticket
-- [ ] Add note/reply
-- [ ] Re-fetch and verify update
+- [x] Connect Freshdesk sandbox
+- [x] Fetch ticket
+- [x] Normalize ticket into GhostWork model
+- [x] Update ticket (close after verified automation)
+- [x] Add note/reply
+- [x] Re-fetch and verify update
+- [x] Discover patterns from Open/Pending Freshdesk tickets
+- [x] Route non-automatable tickets to a human
 
 ## P0 — Claude
 - [ ] Context extraction
@@ -40,8 +42,8 @@
 - [x] Record verification result and mark execution COMPLETED/FAILED
 
 ## P1 — Voice Approval
-- [ ] Sarvam STT local test
-- [ ] Sarvam TTS local test
+- [x] Sarvam STT local test (live: English + Hindi approve/reject, ambiguous speech ignored)
+- [x] Sarvam TTS local test (live: approval prompt, bulbul:v3, 8 kHz WAV)
 - [ ] Vobiz outbound-call test
 - [x] Vobiz webhook test (mocked provider callback)
 - [x] Connect TTS audio to call
@@ -64,10 +66,10 @@
 ## Pre-Demo Validation
 - [ ] ₹10,000 refund proceeds automatically
 - [ ] ₹32,000 refund pauses
-- [ ] Web approval resumes
+- [x] Web approval resumes (live: ticket #3, execution #24)
 - [ ] Rejection stops
 - [ ] Vobiz approval resumes
-- [ ] Freshdesk shows final update
-- [ ] Verification succeeds
+- [x] Freshdesk shows final update (note written, ticket closed)
+- [x] Verification succeeds
 - [ ] Demo completes with Claude unavailable
 - [ ] Demo completes with voice unavailable

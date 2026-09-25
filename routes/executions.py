@@ -2,7 +2,8 @@
 
 from flask import Blueprint, jsonify, request
 
-from app import NotFoundError, ValidationError
+from app import InvalidStateError, NotFoundError, ValidationError
+from config import Config
 from orchestrator.workflow import run_execution
 from services.supabase_service import get_service
 
@@ -37,7 +38,8 @@ def create_execution():
         raise ValidationError("Request body required")
 
     workflow_id = data.get("workflow_id")
-    ticket_id = data.get("ticket_id")
+    # The demo UI omits ticket_id; use the real Freshdesk demo ticket from config.
+    ticket_id = data.get("ticket_id") or Config.FRESHDESK_DEMO_TICKET_ID
     refund_amount = data.get("refund_amount")
 
     if not workflow_id:
@@ -50,8 +52,23 @@ def create_execution():
     if not workflow:
         raise NotFoundError(f"Workflow {workflow_id} not found")
 
+    _check_ticket_matches_playbook(ticket_id, workflow)
+
+    if ticket_id:
+        active = service.get_active_execution_for_ticket(ticket_id)
+        if active:
+            return jsonify(active), 200
+
     # Create execution
-    exec_id = service.create_execution(workflow_id, ticket_id, refund_amount)
+    try:
+        exec_id = service.create_execution(workflow_id, ticket_id, refund_amount)
+    except Exception as exc:
+        # A concurrent click can pass the check above before the first insert.
+        if ticket_id and "idx_one_active_per_ticket" in str(exc):
+            active = service.get_active_execution_for_ticket(ticket_id)
+            if active:
+                return jsonify(active), 200
+        raise
 
     # Start execution (synchronous for testing, would be async in production)
     run_execution(exec_id)
@@ -59,6 +76,34 @@ def create_execution():
     execution = service.get_execution(exec_id)
 
     return jsonify(execution), 202
+
+
+def _check_ticket_matches_playbook(ticket_id, workflow) -> None:
+    """Refuse to automate a Freshdesk ticket that is resolved/closed or belongs to another playbook.
+
+    Skipped when Freshdesk is unavailable, so the cached demo path keeps working.
+    """
+    from services.discovery_service import discover
+    from services.ticket_discovery_service import find_ticket_pattern
+
+    if not ticket_id:
+        return
+    try:
+        ticket_id = int(ticket_id)
+    except (TypeError, ValueError):
+        raise ValidationError("ticket_id must be an integer")
+    result = discover(min_frequency=1)
+    if result["source"] != "freshdesk":
+        return
+    pattern = find_ticket_pattern(ticket_id, result["workflows"])
+    if not pattern:
+        # Discovery only returns Open/Pending tickets, so this ticket is resolved, closed or missing.
+        raise InvalidStateError(f"Ticket {ticket_id} is not an open or pending Freshdesk ticket")
+    if pattern["automation"]["workflow_name"] != workflow.get("name"):
+        raise InvalidStateError(
+            f"Ticket {ticket_id} is a '{pattern['name']}' ticket, not '{workflow.get('name')}'. "
+            f"{pattern['automation']['reason']}"
+        )
 
 
 @executions_bp.route("/executions", methods=["GET"])

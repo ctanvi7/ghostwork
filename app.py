@@ -1,10 +1,11 @@
+import hmac
 import logging
 import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request
 
 from config import Config
 
@@ -110,6 +111,41 @@ def setup_request_id_middleware(app: Flask) -> None:
         return response
 
 
+# Reachable without the app password. Vobiz cannot log in, so its callbacks are
+# instead protected by a per-call secret token checked in voice_approval_service.
+PUBLIC_PATHS = ("/api/health",)
+PUBLIC_PREFIXES = ("/api/webhooks/vobiz", "/api/voice/audio/")
+
+
+def setup_access_protection(app: Flask) -> None:
+    """Require a browser login (HTTP Basic) when APP_PASSWORD is set.
+
+    On a hosted deployment (Vercel sets VERCEL=1) a missing password fails
+    closed instead of leaving approvals open to anyone with the URL.
+    """
+
+    @app.before_request
+    def require_login():
+        path = request.path
+        if path in PUBLIC_PATHS or path.startswith(PUBLIC_PREFIXES):
+            return None
+        if not Config.APP_PASSWORD:
+            if Config.IS_HOSTED:
+                return jsonify({"error": {"code": "ACCESS_NOT_CONFIGURED",
+                                          "message": "Set APP_PASSWORD before using the hosted app"}}), 503
+            return None  # local development
+
+        auth = request.authorization
+        valid = (
+            auth is not None
+            and hmac.compare_digest((auth.username or "").encode(), Config.APP_USERNAME.encode())
+            and hmac.compare_digest((auth.password or "").encode(), Config.APP_PASSWORD.encode())
+        )
+        if valid:
+            return None
+        return Response("Login required", 401, {"WWW-Authenticate": 'Basic realm="GhostWork"'})
+
+
 def setup_security_headers(app: Flask) -> None:
     """Add security headers to all responses."""
 
@@ -187,6 +223,7 @@ def create_app(config_override: Optional[Dict[str, Any]] = None) -> Flask:
     # Setup middleware and handlers
     setup_logging(app)
     setup_request_id_middleware(app)
+    setup_access_protection(app)
     setup_security_headers(app)
     setup_error_handlers(app)
 

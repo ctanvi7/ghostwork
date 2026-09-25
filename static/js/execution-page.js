@@ -56,9 +56,13 @@ function renderExecution(execution) {
                     <h3>Human Approval Required</h3>
                     <div class="approval-amount">
                         <div class="amount-display">
-                            <div>Refund Amount: <strong>₹${formatNumber(amount)}</strong></div>
-                            <div>Autonomy Limit: <strong>₹25,000</strong></div>
-                            <div class="amount-exceeds">Exceeds limit by ₹${formatNumber(amount - 25000)}</div>
+                            ${execution.refund_amount == null
+                                ? `<div>Refund Amount: <strong>Not provided on ticket</strong></div>
+                                   <div>Autonomy Limit: <strong>₹25,000</strong></div>
+                                   <div class="amount-exceeds">Amount unknown, so a human must review before any refund</div>`
+                                : `<div>Refund Amount: <strong>₹${formatNumber(amount)}</strong></div>
+                                   <div>Autonomy Limit: <strong>₹25,000</strong></div>
+                                   <div class="amount-exceeds">Exceeds limit by ₹${formatNumber(amount - 25000)}</div>`}
                         </div>
                     </div>
                     <div class="approval-buttons">
@@ -74,6 +78,7 @@ function renderExecution(execution) {
 
     const stepsHtml = renderSteps(execution.steps || []);
     const impactHtml = renderImpact(execution);
+    const sourceHtml = renderSource(execution);
 
     container.innerHTML = `
         <div class="execution-header">
@@ -82,6 +87,8 @@ function renderExecution(execution) {
                 ${statusLabel(status)}
             </div>
         </div>
+
+        ${sourceHtml}
 
         <section class="section">
             <h3>Workflow Steps</h3>
@@ -115,8 +122,11 @@ function renderExecution(execution) {
             callBtn.disabled = true;
             callBtn.textContent = 'Calling...';
             try {
-                await api.callApprover(executionId);
-                ui.showSuccess('Approval call started. Web approval remains available.');
+                const call = await api.callApprover(executionId);
+                const who = call.approver && call.approver.source === 'ticket_assignee'
+                    ? `ticket assignee (${call.approver.number})`
+                    : `fallback approver (${call.approver ? call.approver.number : 'configured number'})`;
+                ui.showSuccess(`Calling ${who}. Web approval remains available.`);
             } catch (error) {
                 ui.showError('Call unavailable', error);
                 callBtn.disabled = false;
@@ -124,6 +134,66 @@ function renderExecution(execution) {
             }
         });
     }
+}
+
+function stepOutput(execution, stepName) {
+    const step = (execution.steps || []).find(s => s.step_name === stepName);
+    return (step && step.output_json && typeof step.output_json === 'object') ? step.output_json : null;
+}
+
+function safeFreshdeskUrl(url) {
+    try {
+        const parsed = new URL(url);
+        return parsed.protocol === 'https:' && parsed.hostname.endsWith('.freshdesk.com') ? parsed.href : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function renderSource(execution) {
+    const context = stepOutput(execution, 'context_agent');
+    if (!context) return '';
+
+    if (context.source !== 'freshdesk' || !context.ticket) {
+        const label = context.source === 'fallback_error' ? 'Demo data (Freshdesk read failed)' : 'Demo data';
+        return `
+            <section class="section source-section" data-source="demo">
+                <h3>Source</h3>
+                <div class="source-grid">
+                    <div><span class="source-label">Source</span><strong>${escapeHtml(label)}</strong></div>
+                    <div><span class="source-label">Ticket</span><strong>#${escapeHtml(String(execution.ticket_id ?? '—'))}</strong></div>
+                    ${context.freshdesk_error ? `<div class="source-subject"><span class="source-label">Reason</span><strong>${escapeHtml(context.freshdesk_error)}</strong></div>` : ''}
+                </div>
+            </section>
+        `;
+    }
+
+    const ticket = context.ticket;
+    const url = safeFreshdeskUrl(ticket.url);
+    const write = stepOutput(execution, 'communication_agent');
+    const verify = stepOutput(execution, 'verification_agent');
+    const closure = stepOutput(execution, 'closure_agent');
+    const amountSource = {
+        request: 'Entered at execution start',
+        freshdesk_custom_field: 'Freshdesk Refund Amount field',
+        missing: 'Not provided (approval required)'
+    }[context.refund_amount_source] || '—';
+
+    return `
+        <section class="section source-section" data-source="freshdesk">
+            <h3>Source: Freshdesk</h3>
+            <div class="source-grid">
+                <div><span class="source-label">Provider</span><strong>${escapeHtml((context.provider || '—').toUpperCase())}</strong></div>
+                <div><span class="source-label">Ticket</span><strong>#${escapeHtml(String(ticket.ticket_id))}</strong></div>
+                <div class="source-subject"><span class="source-label">Subject</span><strong>${escapeHtml(ticket.subject || '')}</strong></div>
+                <div><span class="source-label">Refund amount from</span><strong>${escapeHtml(amountSource)}</strong></div>
+                <div><span class="source-label">Write-back</span><strong>${write ? escapeHtml(write.action_performed ? `Note ${write.note_id} via ${(write.provider || '').toUpperCase()}` : 'Not written') : 'Not yet (after approval)'}</strong></div>
+                <div><span class="source-label">Readback</span><strong>${verify ? escapeHtml(verify.verified ? `Verified via ${(verify.provider || '').toUpperCase()}` : 'Not verified') : 'Not yet'}</strong></div>
+                <div><span class="source-label">Ticket closure</span><strong>${closure ? escapeHtml(closure.closed ? 'Closed and confirmed' : closure.reason || 'Left open') : 'Not yet (after verification)'}</strong></div>
+            </div>
+            ${url ? `<a class="btn btn-secondary source-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">View in Freshdesk</a>` : ''}
+        </section>
+    `;
 }
 
 function renderImpact(execution) {

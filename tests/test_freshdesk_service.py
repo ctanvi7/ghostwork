@@ -60,28 +60,34 @@ class TestGetTicket:
                 assert call_args[1]["timeout"] == (3, 10)
 
     def test_missing_credentials_raises_error(self):
-        """Raises FreshDeskUnavailableError when credentials not configured."""
+        """Raises FreshDeskUnavailableError when neither MCP nor REST is configured."""
         with patch("services.freshdesk_service.Config") as mock_config:
             mock_config.FRESHDESK_DOMAIN = None
             mock_config.FRESHDESK_API_KEY = None
+            mock_config.MCP_FRESHDESK_URL = None
+            mock_config.MCP_FRESHDESK_AUTH_TOKEN = None
 
             with pytest.raises(FreshDeskUnavailableError):
                 get_ticket(2048)
 
     def test_missing_domain_raises_error(self):
-        """Raises FreshDeskUnavailableError when only domain is missing."""
+        """Raises FreshDeskUnavailableError when only domain is missing (and MCP absent)."""
         with patch("services.freshdesk_service.Config") as mock_config:
             mock_config.FRESHDESK_DOMAIN = None
             mock_config.FRESHDESK_API_KEY = "test-key"
+            mock_config.MCP_FRESHDESK_URL = None
+            mock_config.MCP_FRESHDESK_AUTH_TOKEN = None
 
             with pytest.raises(FreshDeskUnavailableError):
                 get_ticket(2048)
 
     def test_missing_api_key_raises_error(self):
-        """Raises FreshDeskUnavailableError when only API key is missing."""
+        """Raises FreshDeskUnavailableError when only API key is missing (and MCP absent)."""
         with patch("services.freshdesk_service.Config") as mock_config:
             mock_config.FRESHDESK_DOMAIN = "acme.freshdesk.com"
             mock_config.FRESHDESK_API_KEY = None
+            mock_config.MCP_FRESHDESK_URL = None
+            mock_config.MCP_FRESHDESK_AUTH_TOKEN = None
 
             with pytest.raises(FreshDeskUnavailableError):
                 get_ticket(2048)
@@ -429,3 +435,116 @@ class TestContextAgentWithFreshdesk:
                 # Verify mocks were called, not real functions
                 mock_get.assert_called_once_with(123)
                 mock_claude.assert_called_once()
+
+
+class TestMCPProviderSelectionAndFallback:
+    """Regression tests for the freshdesk=false bug and the silent-fallback risk.
+
+    Root cause #1: get_ticket()/add_note()/verify_note_exists() gated on
+    REST-only credentials before ever trying MCP, so an MCP-only setup
+    (no FRESHDESK_DOMAIN/FRESHDESK_API_KEY) raised FreshDeskUnavailableError
+    without attempting MCP at all.
+
+    Root cause #2: _use_mcp_provider() had dead code
+    ("... in sys.modules or True") that always returned True regardless of
+    whether MCP was actually configured.
+    """
+
+    def test_get_ticket_uses_mcp_when_only_mcp_configured(self):
+        """An MCP-only setup (no REST vars) must not raise unavailable and must use MCP."""
+        with patch("services.freshdesk_service.Config") as mock_config:
+            mock_config.FRESHDESK_PROVIDER = "mcp"
+            mock_config.MCP_FRESHDESK_URL = "https://example.freshdesk.com/mcp"
+            mock_config.MCP_FRESHDESK_AUTH_TOKEN = "fwapi_test_token"
+            mock_config.FRESHDESK_DOMAIN = None
+            mock_config.FRESHDESK_API_KEY = None
+
+            with patch("services.freshdesk_mcp_adapter.is_configured", return_value=True):
+                with patch("services.freshdesk_mcp_adapter.fetch_ticket") as mock_fetch:
+                    mock_fetch.return_value = FreshDeskTicket(
+                        ticket_id=1,
+                        subject="Test via MCP",
+                        description_text="",
+                        requester_id=None,
+                        requester_name=None,
+                        status=None,
+                        priority=1,
+                        created_at=None,
+                        custom_fields={},
+                        raw_response={},
+                    )
+
+                    result = get_ticket(1)
+
+                    assert result.subject == "Test via MCP"
+                    mock_fetch.assert_called_once_with(1)
+
+    def test_mcp_failure_does_not_silently_fall_back_when_disabled(self):
+        """allow_rest_fallback=False must propagate MCP errors, never mask them via REST."""
+        from services.freshdesk_mcp_adapter import FreshDeskMCPError
+
+        with patch("services.freshdesk_service.Config") as mock_config:
+            mock_config.FRESHDESK_PROVIDER = "mcp"
+            mock_config.MCP_FRESHDESK_URL = "https://example.freshdesk.com/mcp"
+            mock_config.MCP_FRESHDESK_AUTH_TOKEN = "fwapi_test_token"
+            # REST is fully configured too - it must NOT be used to mask an MCP failure.
+            mock_config.FRESHDESK_DOMAIN = "acme.freshdesk.com"
+            mock_config.FRESHDESK_API_KEY = "some-rest-key"
+
+            with patch("services.freshdesk_mcp_adapter.is_configured", return_value=True):
+                with patch("services.freshdesk_mcp_adapter.fetch_ticket") as mock_fetch:
+                    mock_fetch.side_effect = FreshDeskMCPError("simulated MCP outage")
+
+                    with patch("services.freshdesk_service.requests.get") as mock_rest_get:
+                        with pytest.raises(FreshDeskMCPError):
+                            get_ticket(1, allow_rest_fallback=False)
+
+                        # REST must never have been attempted - no silent masking.
+                        mock_rest_get.assert_not_called()
+
+    def test_mcp_failure_does_not_fall_back_by_default(self):
+        """With FRESHDESK_ALLOW_REST_FALLBACK=false (the default), MCP errors propagate."""
+        from services.freshdesk_mcp_adapter import FreshDeskMCPError
+
+        with patch("services.freshdesk_service.Config") as mock_config:
+            mock_config.FRESHDESK_PROVIDER = "mcp"
+            mock_config.FRESHDESK_ALLOW_REST_FALLBACK = False
+            mock_config.MCP_FRESHDESK_URL = "https://example.freshdesk.com/mcp"
+            mock_config.MCP_FRESHDESK_AUTH_TOKEN = "fwapi_test_token"
+            mock_config.FRESHDESK_DOMAIN = "acme.freshdesk.com"
+            mock_config.FRESHDESK_API_KEY = "some-rest-key"
+
+            with patch("services.freshdesk_mcp_adapter.fetch_ticket") as mock_fetch:
+                mock_fetch.side_effect = FreshDeskMCPError("simulated MCP outage")
+                with patch("services.freshdesk_service.requests.get") as mock_rest_get:
+                    with pytest.raises(FreshDeskMCPError):
+                        get_ticket(1)
+                    mock_rest_get.assert_not_called()
+
+    def test_mcp_failure_falls_back_to_rest_when_fallback_allowed(self):
+        """FRESHDESK_ALLOW_REST_FALLBACK=true opts back in to REST resilience."""
+        from services.freshdesk_mcp_adapter import FreshDeskMCPError
+
+        with patch("services.freshdesk_service.Config") as mock_config:
+            mock_config.FRESHDESK_PROVIDER = "mcp"
+            mock_config.FRESHDESK_ALLOW_REST_FALLBACK = True
+            mock_config.MCP_FRESHDESK_URL = "https://example.freshdesk.com/mcp"
+            mock_config.MCP_FRESHDESK_AUTH_TOKEN = "fwapi_test_token"
+            mock_config.FRESHDESK_DOMAIN = "acme.freshdesk.com"
+            mock_config.FRESHDESK_API_KEY = "some-rest-key"
+
+            with patch("services.freshdesk_mcp_adapter.is_configured", return_value=True):
+                with patch("services.freshdesk_mcp_adapter.fetch_ticket") as mock_fetch:
+                    mock_fetch.side_effect = FreshDeskMCPError("simulated MCP outage")
+
+                    with patch("services.freshdesk_service.requests.get") as mock_rest_get:
+                        mock_response = MagicMock()
+                        mock_response.status_code = 200
+                        mock_response.ok = True
+                        mock_response.json.return_value = {"id": 1, "subject": "via REST fallback"}
+                        mock_rest_get.return_value = mock_response
+
+                        result = get_ticket(1)  # default allow_rest_fallback=True
+
+                        assert result.subject == "via REST fallback"
+                        mock_rest_get.assert_called_once()

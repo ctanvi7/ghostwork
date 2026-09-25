@@ -10,6 +10,14 @@ from services.freshdesk_service import (
 )
 
 
+@pytest.fixture(autouse=True)
+def ticket_still_open():
+    """The agent re-reads ticket status before writing; default to an Open ticket."""
+    with patch("agents.communication_agent.get_ticket",
+               return_value=MagicMock(raw_response={"status": 2})) as fetch:
+        yield fetch
+
+
 class TestCommunicationAgent:
     """Test communication agent Freshdesk write-back."""
 
@@ -352,6 +360,8 @@ class TestAddNoteFunction:
         with patch("services.freshdesk_service.Config") as mock_config:
             mock_config.FRESHDESK_DOMAIN = None
             mock_config.FRESHDESK_API_KEY = None
+            mock_config.MCP_FRESHDESK_URL = None
+            mock_config.MCP_FRESHDESK_AUTH_TOKEN = None
 
             with pytest.raises(FreshDeskUnavailableError):
                 add_note(2048, "Test note")

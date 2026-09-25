@@ -140,8 +140,9 @@ Hackathon prototype in active development.
 ## Voice approval setup
 
 Voice calling is optional. Set `VOBIZ_AUTH_ID`, `VOBIZ_AUTH_TOKEN`,
-`VOBIZ_FROM_NUMBER`, `APPROVER_PHONE`, and a provider-reachable HTTPS
-`PUBLIC_BASE_URL` in `.env`. The old `VOBIZ_API_KEY` name is accepted as an
+`VOBIZ_FROM_NUMBER`, and a provider-reachable HTTPS `PUBLIC_BASE_URL` in
+`.env`. The approver called is the Freshdesk ticket's assigned agent (mobile,
+then phone, from the agent profile); `APPROVER_PHONE` is only a fallback. The old `VOBIZ_API_KEY` name is accepted as an
 auth-token fallback, but an auth ID is still required. Set `SARVAM_API_KEY`
 to use Sarvam prompts and speech recognition. Localhost is not a public
 callback URL; use an HTTPS tunnel for a local live-call test.

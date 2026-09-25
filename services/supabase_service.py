@@ -2,12 +2,24 @@
 
 import logging
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from config import Config
 from services.memory_store import MemoryStore
 
 logger = logging.getLogger(__name__)
+
+
+def _json_safe(value):
+    """Preserve exact decimal values when storing agent output as JSONB."""
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
 
 
 class SupabaseService:
@@ -18,6 +30,7 @@ class SupabaseService:
         self.backend = Config.DB_BACKEND.lower()
         self._memory_store: Optional[MemoryStore] = None
         self._supabase_client = None
+        self._execution_step_order_supported = True
 
         if self.backend == "memory":
             self._memory_store = MemoryStore()
@@ -185,6 +198,24 @@ class SupabaseService:
             logger.error(f"Failed to create execution: {e}")
             raise
 
+    def get_active_execution_for_ticket(self, ticket_id: int) -> Optional[Dict[str, Any]]:
+        """Find the run protected by the one-active-execution-per-ticket rule."""
+        active = {"PENDING", "RUNNING", "WAITING_FOR_APPROVAL", "APPROVED"}
+        if self.backend == "memory":
+            rows = self._get_store().select("executions", {"ticket_id": ticket_id})
+            match = next((row for row in reversed(rows) if row.get("status") in active), None)
+            return self.get_execution(match["id"]) if match else None
+
+        response = (
+            self._supabase_client.table("executions")
+            .select("id")
+            .eq("ticket_id", ticket_id)
+            .in_("status", sorted(active))
+            .limit(1)
+            .execute()
+        )
+        return self.get_execution(response.data[0]["id"]) if response.data else None
+
     def get_execution(self, execution_id: int) -> Optional[Dict[str, Any]]:
         """Get execution by ID with all related data (steps, approvals)."""
         if self.backend == "memory":
@@ -211,7 +242,9 @@ class SupabaseService:
             exec_row = exec_response.data[0]
 
             # Fetch related steps
-            steps_response = self._supabase_client.table("execution_steps").select("*").eq("execution_id", execution_id).execute()
+            # Postgres has no default row order; order by id so steps show in run order.
+            steps_response = (self._supabase_client.table("execution_steps").select("*")
+                              .eq("execution_id", execution_id).order("id").execute())
             steps = steps_response.data or []
             # Map result_json back to output_json for consistency with code
             steps = [self._map_result_to_output(step) for step in steps]
@@ -335,7 +368,20 @@ class SupabaseService:
             return self._get_store().insert("execution_steps", data)
 
         try:
-            response = self._supabase_client.table("execution_steps").insert(data).execute()
+            if not getattr(self, "_execution_step_order_supported", True):
+                data.pop("step_order")
+            try:
+                response = self._supabase_client.table("execution_steps").insert(data).execute()
+            except Exception as e:
+                # Older deployed schemas lack this optional column. Step order
+                # can be reconstructed from workflow_steps when resuming.
+                if "step_order" not in str(e) or not any(
+                    code in str(e) for code in ("PGRST204", "42703")
+                ):
+                    raise
+                self._execution_step_order_supported = False
+                data.pop("step_order")
+                response = self._supabase_client.table("execution_steps").insert(data).execute()
             return response.data[0]["id"] if response.data else None
         except Exception as e:
             logger.error(f"Failed to create execution step for execution {execution_id}: {e}")
@@ -352,6 +398,8 @@ class SupabaseService:
 
         # Map output_json to result_json for Supabase
         fields = self._map_output_to_result(fields)
+        if "result_json" in fields:
+            fields["result_json"] = _json_safe(fields["result_json"])
 
         try:
             response = self._supabase_client.table("execution_steps").update(fields).eq("id", step_id).execute()

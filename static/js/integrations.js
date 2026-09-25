@@ -38,7 +38,10 @@ function renderIntegrations(data) {
     ];
 
     gridEl.innerHTML = integrations.map(integration => {
-        const isConfigured = configured[integration.id];
+        const value = configured[integration.id];
+        const isConfigured = integration.id === 'freshdesk'
+            ? value?.configured === true
+            : value === true;
         const status = isConfigured ? 'Configured' : 'Not configured';
         const statusClass = isConfigured ? 'status-configured' : 'status-not-configured';
 

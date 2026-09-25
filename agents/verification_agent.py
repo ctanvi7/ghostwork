@@ -8,11 +8,19 @@ from config import Config
 from services.freshdesk_service import (
     FreshDeskError,
     FreshDeskUnavailableError,
+    get_last_provider_used,
     verify_note_exists,
 )
 from services.supabase_service import get_service
 
 logger = logging.getLogger(__name__)
+
+
+def _freshdesk_configured() -> bool:
+    """Config check for the provider actually selected (MCP or REST)."""
+    if Config.FRESHDESK_PROVIDER == "mcp":
+        return bool(Config.MCP_FRESHDESK_URL and Config.MCP_FRESHDESK_AUTH_TOKEN)
+    return bool(Config.FRESHDESK_DOMAIN and Config.FRESHDESK_API_KEY)
 
 
 def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -71,6 +79,21 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
         writeback_status = comm_result.get("writeback_status", "skipped")
         source = comm_result.get("source", "fallback")
 
+        # A real Freshdesk ticket whose write-back did not happen cannot be
+        # reported as a completed external action.
+        if not action_performed and source == "freshdesk":
+            logger.warning(f"Freshdesk ticket write-back not performed (status: {writeback_status})")
+            return {
+                "status": "FAILED",
+                "result": {
+                    "reason": f"Verification failed: Freshdesk write-back not performed ({writeback_status})",
+                    "verified": False,
+                    "verification_status": "writeback_not_performed",
+                    "ticket_id": comm_result.get("ticket_id"),
+                    "source": source
+                }
+            }
+
         # If no action was performed, mark as skipped (safe for demo)
         if not action_performed:
             logger.info(f"No action performed (status: {writeback_status}), verification skipped")
@@ -104,7 +127,7 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
             }
 
         # Check if Freshdesk is configured
-        if not Config.FRESHDESK_DOMAIN or not Config.FRESHDESK_API_KEY:
+        if not _freshdesk_configured():
             logger.warning("Freshdesk not configured for verification, but action was performed")
             return {
                 "status": "FAILED",
@@ -125,17 +148,19 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
                 execution_reference=external_reference
             )
 
+            provider = get_last_provider_used()
             if result.get("verified"):
-                logger.info(f"Verification successful for ticket {ticket_id}")
+                logger.info(f"Verification successful for ticket {ticket_id} via {provider}")
                 return {
                     "status": "SUCCESS",
                     "result": {
-                        "reason": result.get("reason"),
+                        "reason": f"Read back ticket #{ticket_id} via {provider}: {result.get('reason')}",
                         "verified": True,
                         "verification_status": "verified",
                         "ticket_id": ticket_id,
                         "matched_note_id": result.get("matched_note_id"),
-                        "source": source
+                        "source": source,
+                        "provider": provider
                     }
                 }
             else:
@@ -149,7 +174,8 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
                         "verification_status": "verification_failed",
                         "ticket_id": ticket_id,
                         "expected_note_id": note_id,
-                        "source": source
+                        "source": source,
+                        "provider": provider
                     }
                 }
 

@@ -434,6 +434,8 @@ class TestVerifyNoteExistsFunction:
         with patch("services.freshdesk_service.Config") as mock_config:
             mock_config.FRESHDESK_DOMAIN = None
             mock_config.FRESHDESK_API_KEY = None
+            mock_config.MCP_FRESHDESK_URL = None
+            mock_config.MCP_FRESHDESK_AUTH_TOKEN = None
 
             with pytest.raises(FreshDeskUnavailableError):
                 verify_note_exists(2048)

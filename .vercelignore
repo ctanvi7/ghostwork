@@ -1,0 +1,18 @@
+# Secrets: configure these as Vercel environment variables instead
+.env
+.env.*
+.mcp.json
+.claude/
+
+# Not needed at runtime
+venv/
+tests/
+migrations/
+scripts/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.md
+requirements-dev.txt
+# Tooling-only; dependencies come from requirements.txt
+pyproject.toml

@@ -73,6 +73,79 @@ class TestIntegrations:
         assert "FRESHDESK_API_KEY" not in response_str
 
 
+class TestFreshdeskProviderDetection:
+    """Regression tests for the freshdesk MCP-vs-REST configured detection bug.
+
+    Root cause: get_integrations_status() used to check REST-only env vars
+    (FRESHDESK_DOMAIN/FRESHDESK_API_KEY) regardless of which provider was
+    selected, so freshdesk always reported false when only MCP was configured.
+    """
+
+    def test_provider_mcp_with_mcp_config_present_reports_true(self, client, monkeypatch):
+        from config import Config
+
+        monkeypatch.setattr(Config, "FRESHDESK_PROVIDER", "mcp")
+        monkeypatch.setattr(Config, "MCP_FRESHDESK_URL", "https://example.freshdesk.com/mcp")
+        monkeypatch.setattr(Config, "MCP_FRESHDESK_AUTH_TOKEN", "fwapi_test_token_value")
+        # REST vars intentionally absent - MCP alone must be sufficient.
+        monkeypatch.setattr(Config, "FRESHDESK_DOMAIN", None)
+        monkeypatch.setattr(Config, "FRESHDESK_API_KEY", None)
+
+        response = client.get("/api/integrations")
+        data = json.loads(response.data)
+
+        assert data["configured"]["freshdesk"]["configured"] is True
+        assert data["configured"]["freshdesk"]["provider"] == "mcp"
+
+    def test_provider_mcp_with_mcp_config_absent_reports_false(self, client, monkeypatch):
+        from config import Config
+
+        monkeypatch.setattr(Config, "FRESHDESK_PROVIDER", "mcp")
+        monkeypatch.setattr(Config, "MCP_FRESHDESK_URL", None)
+        monkeypatch.setattr(Config, "MCP_FRESHDESK_AUTH_TOKEN", None)
+        # Even if REST happens to be configured, provider=mcp must not borrow it.
+        monkeypatch.setattr(Config, "FRESHDESK_DOMAIN", "example")
+        monkeypatch.setattr(Config, "FRESHDESK_API_KEY", "some-rest-key")
+
+        response = client.get("/api/integrations")
+        data = json.loads(response.data)
+
+        assert data["configured"]["freshdesk"]["configured"] is False
+        assert data["configured"]["freshdesk"]["provider"] == "mcp"
+        assert set(data["configured"]["freshdesk"]["missing_config"]) == {
+            "MCP_FRESHDESK_URL",
+            "MCP_FRESHDESK_AUTH_TOKEN",
+        }
+
+    def test_provider_rest_with_rest_config_present_reports_true(self, client, monkeypatch):
+        from config import Config
+
+        monkeypatch.setattr(Config, "FRESHDESK_PROVIDER", "rest")
+        monkeypatch.setattr(Config, "FRESHDESK_DOMAIN", "example")
+        monkeypatch.setattr(Config, "FRESHDESK_API_KEY", "some-rest-key")
+        monkeypatch.setattr(Config, "MCP_FRESHDESK_URL", None)
+        monkeypatch.setattr(Config, "MCP_FRESHDESK_AUTH_TOKEN", None)
+
+        response = client.get("/api/integrations")
+        data = json.loads(response.data)
+
+        assert data["configured"]["freshdesk"]["configured"] is True
+        assert data["configured"]["freshdesk"]["provider"] == "rest"
+
+    def test_no_mcp_credentials_exposed(self, client, monkeypatch):
+        from config import Config
+
+        monkeypatch.setattr(Config, "FRESHDESK_PROVIDER", "mcp")
+        monkeypatch.setattr(Config, "MCP_FRESHDESK_URL", "https://example.freshdesk.com/mcp")
+        monkeypatch.setattr(Config, "MCP_FRESHDESK_AUTH_TOKEN", "fwapi_SECRET_TOKEN_VALUE")
+
+        response = client.get("/api/integrations")
+        response_str = response.get_data(as_text=True)
+
+        assert "fwapi_SECRET_TOKEN_VALUE" not in response_str
+        assert "MCP_FRESHDESK_AUTH_TOKEN" not in response_str or "SECRET" not in response_str
+
+
 class TestErrorEnvelope:
     """Error handling and error envelope structure."""
 

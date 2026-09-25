@@ -2,6 +2,8 @@
 .env
 .env.local
 .env.*.local
+# Claude Code MCP config (contains the Freshdesk MCP auth token)
+.mcp.json
 
 # Python
 __pycache__/

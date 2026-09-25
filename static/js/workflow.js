@@ -89,7 +89,6 @@ async function startExecution() {
     try {
         const execution = await api.createExecution({
             workflow_id: workflowId,
-            ticket_id: 2048,
             refund_amount: amount
         });
 

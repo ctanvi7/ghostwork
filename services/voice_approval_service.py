@@ -12,6 +12,7 @@ from xml.etree import ElementTree
 from config import Config
 from orchestrator.workflow import run_execution
 from services.approvals_service import decide
+from services.approver_service import ApproverUnavailableError, resolve_approver
 from services.sarvam_service import SarvamError, synthesize, transcribe
 from services.supabase_service import get_service
 from services.vobiz_service import VobizError, fetch_recording, place_approval_call
@@ -69,33 +70,58 @@ def start_call(execution_id: int) -> dict:
     if not Config.voice_call_configured():
         raise VoiceApprovalError("Voice calling is not configured; use web approval")
 
+    # Call the Freshdesk ticket's assigned agent (APPROVER_PHONE only as a fallback).
+    try:
+        approver = resolve_approver(execution.get("ticket_id"))
+    except ApproverUnavailableError as exc:
+        raise VoiceApprovalError(str(exc)) from exc
+
     token = secrets.token_urlsafe(32)
     metadata = {
         "voice_token_hash": hashlib.sha256(token.encode()).hexdigest(),
         "voice_stage": "choice",
+        "approver_source": approver["source"],
+        "approver_agent_id": approver["agent_id"],
+        "approver_number_masked": approver["masked"],
     }
-    _update_pending(approval["id"], channel="voice", raw_response_json=metadata)
     _clear_audio(approval["id"])
 
     if Config.SARVAM_API_KEY:
-        for kind, prompt in (("request", _prompt(approval.get("amount"))), ("confirm", _prompt(None, True))):
-            try:
-                _audio_cache[(approval["id"], kind)] = synthesize(prompt)
-            except SarvamError:
-                logger.warning("Sarvam TTS unavailable; Vobiz Speak fallback will be used")
+        try:
+            for kind in ("request", "confirm"):
+                _audio_cache[(approval["id"], kind)] = _synthesize_prompt(approval, kind)
+            # Persisted (not just cached) so any server instance knows to <Play> Sarvam audio.
+            metadata["sarvam_audio"] = True
+        except SarvamError:
+            _clear_audio(approval["id"])
+            logger.warning("Sarvam TTS unavailable; Vobiz Speak fallback will be used")
+
+    # Saved before dialing, so the first Vobiz callback always finds the token and audio flag.
+    _update_pending(approval["id"], channel="voice", raw_response_json=metadata)
 
     try:
         call_id = place_approval_call(
             _callback_url(approval["id"], token, "answer"),
             _callback_url(approval["id"], token, "hangup"),
+            approver["to"],
         )
     except VobizError:
         _update_pending(approval["id"], channel="web", raw_response_json={"voice_status": "call_failed"})
         raise
     metadata["call_id"] = call_id
     _update_pending(approval["id"], raw_response_json=metadata)
-    service.log_audit_event(execution_id, "VOICE_CALL_STARTED", actor="vobiz", detail={"approval_id": approval["id"]})
-    return {"status": "calling", "approval_id": approval["id"], "call_id": call_id}
+    service.log_audit_event(execution_id, "VOICE_CALL_STARTED", actor="vobiz", detail={
+        "approval_id": approval["id"],
+        "approver_source": approver["source"],
+        "approver_agent_id": approver["agent_id"],
+        "approver_number_masked": approver["masked"],
+    })
+    return {
+        "status": "calling",
+        "approval_id": approval["id"],
+        "call_id": call_id,
+        "approver": {"source": approver["source"], "number": approver["masked"], "note": approver["note"]},
+    }
 
 
 def _checked_approval(approval_id: int, token: str) -> dict:
@@ -112,11 +138,26 @@ def _checked_approval(approval_id: int, token: str) -> dict:
     return approval
 
 
+def _synthesize_prompt(approval: dict, kind: str) -> bytes:
+    if kind == "confirm":
+        return synthesize(_prompt(None, confirmation=True))
+    return synthesize(_prompt(approval.get("amount")))
+
+
 def get_audio(approval_id: int, token: str, kind: str) -> bytes:
-    _checked_approval(approval_id, token)
+    approval = _checked_approval(approval_id, token)
     audio = _audio_cache.get((approval_id, kind))
-    if not audio:
+    if audio:
+        return audio
+    # Serverless: Vobiz may reach a different instance than the one that
+    # prepared the prompt, so regenerate it instead of failing the call.
+    if not _metadata(approval).get("sarvam_audio"):
         raise VoiceApprovalError("Audio is unavailable")
+    try:
+        audio = _synthesize_prompt(approval, kind)
+    except SarvamError as exc:
+        raise VoiceApprovalError("Audio is unavailable") from exc
+    _audio_cache[(approval_id, kind)] = audio
     return audio
 
 
@@ -131,7 +172,7 @@ def _xml_prompt(approval: dict, token: str, confirmation: bool = False) -> str:
         "numDigits": "1",
         "executionTimeout": "8",
     })
-    if (approval_id, kind) in _audio_cache:
+    if _metadata(approval).get("sarvam_audio") or (approval_id, kind) in _audio_cache:
         audio_url = f"{Config.PUBLIC_BASE_URL.rstrip('/')}/api/voice/audio/{approval_id}/{kind}?{urlencode({'token': token})}"
         ElementTree.SubElement(gather, "Play").text = audio_url
     else:

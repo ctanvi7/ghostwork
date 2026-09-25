@@ -5,6 +5,16 @@ import os
 # Set DB_BACKEND before any imports
 os.environ["DB_BACKEND"] = "memory"
 
+# Keep tests hermetic: never let the suite reach the real Freshdesk account.
+# load_dotenv() does not override variables that are already set, so these
+# empty values win over any live credentials in .env.
+os.environ["MCP_FRESHDESK_URL"] = ""
+os.environ["MCP_FRESHDESK_AUTH_TOKEN"] = ""
+os.environ["FRESHDESK_DOMAIN"] = ""
+os.environ["FRESHDESK_API_KEY"] = ""
+# Tests use the default field name, whatever the live account calls it.
+os.environ["FRESHDESK_REFUND_AMOUNT_FIELD"] = "cf_refund_amount"
+
 import pytest
 
 from app import create_app

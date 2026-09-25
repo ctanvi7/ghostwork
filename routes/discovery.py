@@ -4,7 +4,7 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
-from services.discovery_service import get_discovered_workflows
+from services.discovery_service import discover, get_discovered_workflows
 
 logger = logging.getLogger(__name__)
 
@@ -39,18 +39,18 @@ def list_workflows():
             data = request.get_json() or {}
             events = data.get("events")
 
-        # Discover workflows
-        workflows = get_discovered_workflows(
-            events=events,
-            min_frequency=min_frequency
-        )
+        # Discover workflows (Freshdesk tickets first, activity events as fallback)
+        result = discover(events=events, min_frequency=min_frequency)
+        workflows = result["workflows"]
 
-        logger.info(f"Discovered {len(workflows)} workflows")
+        logger.info(f"Discovered {len(workflows)} workflows from {result['source']}")
 
         return jsonify({
             "workflows": workflows,
             "count": len(workflows),
-            "min_frequency_used": min_frequency
+            "min_frequency_used": min_frequency,
+            "source": result["source"],
+            "fallback_reason": result["fallback_reason"],
         }), 200
 
     except Exception as e:
@@ -71,9 +71,10 @@ def get_workflow_detail(workflow_id: int):
     Includes full GhostScore breakdown and session details.
     """
     try:
-        workflows = get_discovered_workflows()
+        # min_frequency=1 so single-ticket patterns shown on the page can be opened too
+        workflows = get_discovered_workflows(min_frequency=1)
 
-        # Find workflow by ID (hash-based)
+        # Find workflow by ID
         workflow = None
         for w in workflows:
             if w["id"] == workflow_id:
@@ -109,22 +110,18 @@ def discovery_stats():
         Total events, sessions, discovered workflows, and summary metrics.
     """
     try:
-        from services.discovery_service import (
-            group_events_by_session,
-            load_activity_events,
-        )
-
-        events = load_activity_events()
-        sessions = group_events_by_session(events)
-        workflows = get_discovered_workflows()
+        result = discover()
+        workflows = result["workflows"]
 
         # Calculate aggregate statistics
         total_frequency = sum(w["frequency"] for w in workflows)
         avg_ghostscore = sum(w["ghost_score"] for w in workflows) / len(workflows) if workflows else 0
 
         return jsonify({
-            "total_events": len(events),
-            "total_sessions": len(sessions),
+            "source": result["source"],
+            # Tickets read (Freshdesk) or activity sessions (fallback)
+            "total_events": result["total_items"],
+            "total_sessions": result["total_items"],
             "discovered_workflows": len(workflows),
             "total_workflow_instances": total_frequency,
             "average_ghostscore": round(avg_ghostscore, 1),
@@ -139,3 +136,33 @@ def discovery_stats():
                 "message": str(e)
             }
         }), 500
+
+
+@discovery_bp.route("/tickets/<int:ticket_id>/handoff", methods=["POST"])
+def handoff_ticket(ticket_id: int):
+    """
+    Route a discovered ticket to a human agent (private Freshdesk note, then read-back).
+
+    The pattern and reason are looked up server-side, never taken from the request.
+    """
+    from services.freshdesk_service import FreshDeskError, FreshDeskUnavailableError
+    from services.handoff_service import route_to_human
+    from services.ticket_discovery_service import find_ticket_pattern
+
+    result = discover(min_frequency=1)
+    if result["source"] != "freshdesk":
+        return jsonify({"error": {"code": "FRESHDESK_UNAVAILABLE",
+                                  "message": result["fallback_reason"] or "Freshdesk unavailable"}}), 503
+
+    pattern = find_ticket_pattern(ticket_id, result["workflows"])
+    if not pattern:
+        return jsonify({"error": {"code": "NOT_FOUND",
+                                  "message": f"Ticket {ticket_id} is not an open or pending Freshdesk ticket"}}), 404
+
+    try:
+        handoff = route_to_human(ticket_id, pattern["name"], pattern["automation"]["reason"])
+    except (FreshDeskError, FreshDeskUnavailableError) as e:
+        logger.error(f"Handoff failed for ticket {ticket_id}: {e}")
+        return jsonify({"error": {"code": "HANDOFF_FAILED", "message": str(e)[:200]}}), 502
+
+    return jsonify(handoff), 200

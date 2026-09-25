@@ -274,7 +274,8 @@ class TestExecutionSteps:
                 "risk_agent",
                 "approval_gate",
                 "communication_agent",
-                "verification_agent"
+                "verification_agent",
+                "closure_agent"
             ]
             assert step_names == expected
 
@@ -440,7 +441,7 @@ class TestCurrentStepTracking:
 
             assert result["status"] == "COMPLETED"
             # current_step should be set to the last step
-            assert result.get("current_step") == "verification_agent"
+            assert result.get("current_step") == "closure_agent"
 
     def test_current_step_at_approval_pause(self, app, client):
         """While WAITING_FOR_APPROVAL, current_step should be approval_gate."""
@@ -460,7 +461,7 @@ class TestCurrentStepTracking:
             assert result.get("current_step") == "approval_gate"
 
     def test_current_step_after_approval_resume(self, app, client):
-        """After approval and resume, current_step should be verification_agent (final step)."""
+        """After approval and resume, current_step should be closure_agent (final step)."""
         with app.app_context():
             service = get_service()
 
@@ -478,7 +479,7 @@ class TestCurrentStepTracking:
             # After resume and completion, current_step should be the last step
             result = service.get_execution(exec_id)
             assert result["status"] == "COMPLETED"
-            assert result.get("current_step") == "verification_agent"
+            assert result.get("current_step") == "closure_agent"
 
     def test_current_step_null_initially(self, app, client):
         """Initially created execution has current_step null/missing."""
@@ -499,4 +500,23 @@ class TestCurrentStepTracking:
             run_execution(exec_id)
             result = service.get_execution(exec_id)
             assert result["status"] == "COMPLETED"
-            assert result.get("current_step") == "verification_agent"
+            assert result.get("current_step") == "closure_agent"
+
+
+class TestStepPersistenceFailure:
+    """A DB error while recording a step must not leave the run stuck in RUNNING."""
+
+    def test_step_insert_failure_marks_execution_failed(self, app):
+        from unittest.mock import patch
+
+        with app.app_context():
+            service = get_service()
+            exec_id = service.create_execution(workflow_id=1, ticket_id=2048, refund_amount=Decimal("32000"))
+
+            with patch.object(service, "create_execution_step",
+                              side_effect=RuntimeError("PGRST204 step_order column missing")):
+                run_execution(exec_id)
+
+            result = service.get_execution(exec_id)
+            assert result["status"] == "FAILED"
+            assert "Could not record step" in result["error_message"]
