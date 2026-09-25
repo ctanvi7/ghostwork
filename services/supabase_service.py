@@ -89,6 +89,74 @@ class SupabaseService:
             logger.error(f"Failed to list workflows: {e}")
             raise
 
+    # GhostSkill queries
+    def create_ghost_skill(
+        self, workflow_id: int, name: str, definition_json: Dict[str, Any]
+    ) -> int:
+        """Create a new ghost skill. Returns skill ID."""
+        now = datetime.now(timezone.utc).isoformat()
+        data = {
+            "workflow_id": workflow_id,
+            "name": name,
+            "definition_json": definition_json,
+            "created_at": now,
+        }
+
+        if self.backend == "memory":
+            return self._get_store().insert("ghost_skills", data)
+
+        try:
+            response = self._supabase_client.table("ghost_skills").insert(data).execute()
+            return response.data[0]["id"] if response.data else None
+        except Exception as e:
+            logger.error(f"Failed to create ghost skill: {e}")
+            raise
+
+    def get_ghost_skill(self, skill_id: int) -> Optional[Dict[str, Any]]:
+        """Get ghost skill by ID."""
+        if self.backend == "memory":
+            return self._get_store().select_one("ghost_skills", {"id": skill_id})
+
+        try:
+            response = self._supabase_client.table("ghost_skills").select("*").eq("id", skill_id).execute()
+            return response.data[0] if response.data else None
+        except Exception as e:
+            logger.error(f"Failed to get ghost skill {skill_id}: {e}")
+            raise
+
+    def list_ghost_skills(self) -> List[Dict[str, Any]]:
+        """List all ghost skills."""
+        if self.backend == "memory":
+            return self._get_store().select("ghost_skills")
+
+        try:
+            response = self._supabase_client.table("ghost_skills").select("*").execute()
+            return response.data or []
+        except Exception as e:
+            logger.error(f"Failed to list ghost skills: {e}")
+            raise
+
+    def get_ghost_skill_for_workflow(self, workflow_id: int) -> Optional[Dict[str, Any]]:
+        """Get the most recent ghost skill for a workflow."""
+        if self.backend == "memory":
+            skills = self._get_store().select("ghost_skills", {"workflow_id": workflow_id})
+            # Return the last one (most recently created)
+            return skills[-1] if skills else None
+
+        try:
+            response = (
+                self._supabase_client.table("ghost_skills")
+                .select("*")
+                .eq("workflow_id", workflow_id)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            return response.data[0] if response.data else None
+        except Exception as e:
+            logger.error(f"Failed to get ghost skill for workflow {workflow_id}: {e}")
+            raise
+
     # Execution queries
     def create_execution(
         self,

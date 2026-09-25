@@ -75,6 +75,20 @@ def run_execution(execution_id: int) -> Dict[str, Any]:
     # Build context that accumulates results from previous steps
     step_context = {"execution_id": execution_id}
 
+    # Look up associated GhostSkill and seed approval limit
+    skill = service.get_ghost_skill_for_workflow(workflow_id)
+    if skill:
+        definition = skill.get("definition_json", {})
+        # New schema (autonomy_boundary) takes precedence; fall back to legacy seed shape (approval_rule)
+        threshold = (
+            definition.get("autonomy_boundary", {}).get("threshold")
+            if definition.get("autonomy_boundary")
+            else definition.get("approval_rule", {}).get("value")
+        )
+        if threshold is not None:
+            step_context["skill_approval_limit"] = threshold
+            logger.info(f"Execution {execution_id}: using skill approval limit {threshold}")
+
     # Execute remaining steps
     for step_def in remaining_steps:
         step_name = step_def.get("name")
