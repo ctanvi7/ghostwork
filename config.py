@@ -1,11 +1,12 @@
 import os
 from decimal import Decimal
+from pathlib import Path
 from typing import Dict, List
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).parent / ".env")
 
 
 class Config:

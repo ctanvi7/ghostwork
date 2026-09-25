@@ -103,6 +103,26 @@ class TestIntegrationsAPIContract:
         # Freshdesk should be disabled in demo without credentials
         assert data["configured"]["freshdesk"] is False
 
+    def test_integrations_sarvam_configured_when_key_present(self, client, monkeypatch):
+        """Sarvam should be configured (true) when SARVAM_API_KEY is set."""
+        from config import Config
+        monkeypatch.setattr(Config, "SARVAM_API_KEY", "test-sarvam-key-12345")
+        response = client.get("/api/integrations")
+        data = response.get_json()
+
+        # Sarvam should be enabled when API key is present
+        assert data["configured"]["sarvam"] is True
+
+    def test_integrations_sarvam_not_configured_when_key_absent(self, client, monkeypatch):
+        """Sarvam should not be configured (false) when SARVAM_API_KEY is absent."""
+        from config import Config
+        monkeypatch.setattr(Config, "SARVAM_API_KEY", None)
+        response = client.get("/api/integrations")
+        data = response.get_json()
+
+        # Sarvam should be disabled when API key is absent
+        assert data["configured"]["sarvam"] is False
+
     def test_integrations_no_credentials_exposed(self, client):
         """Response does not contain any sensitive credentials."""
         response = client.get("/api/integrations")
