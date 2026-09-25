@@ -1,6 +1,7 @@
 """Verification agent: verifies that external actions (Freshdesk write-back) occurred."""
 
 import logging
+from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, Optional
 
 from config import Config
@@ -9,6 +10,7 @@ from services.freshdesk_service import (
     FreshDeskUnavailableError,
     verify_note_exists,
 )
+from services.supabase_service import get_service
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,23 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
         - result: verified, verification_status, reason, ticket_id, matched_note_id
     """
     try:
+        execution_id = execution.get("id")
+        if execution_id:
+            try:
+                amount = Decimal(str(execution.get("refund_amount")))
+                requires_approval = not amount.is_finite() or amount <= 0 or amount > Config.AUTO_APPROVAL_LIMIT
+            except (InvalidOperation, TypeError):
+                requires_approval = True
+            if requires_approval and not get_service().get_approved_approval(execution_id):
+                return {
+                    "status": "FAILED",
+                    "result": {
+                        "reason": "Verification failed: required approval record is missing",
+                        "verified": False,
+                        "verification_status": "approval_missing",
+                    },
+                }
+
         # Get communication result from context
         comm_result = None
         if context and "communication_agent" in context:

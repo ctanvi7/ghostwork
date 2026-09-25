@@ -2,7 +2,7 @@
  * Workflow detail page - load and render workflow details with GhostGraph
  */
 
-const workflowId = new URLSearchParams(window.location.search).get('id');
+const workflowId = window.location.pathname.split('/').pop();
 
 async function loadWorkflowDetail() {
     try {
@@ -17,8 +17,8 @@ async function loadWorkflowDetail() {
 
     } catch (err) {
         console.error('Workflow detail error:', err);
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('error').style.display = 'block';
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('error').classList.remove('hidden');
     }
 }
 
@@ -42,12 +42,12 @@ function renderWorkflowDetail(w) {
 
     // Autonomy Boundary (Refund Verification only)
     if (w.name.toLowerCase().includes('refund')) {
-        document.getElementById('autonomy-section').style.display = 'block';
+        document.getElementById('autonomy-section').classList.remove('hidden');
     }
 
     // Show content
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('content').style.display = 'block';
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('content').classList.remove('hidden');
 }
 
 function renderGhostGraph(workflow) {

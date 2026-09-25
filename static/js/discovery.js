@@ -8,8 +8,8 @@ async function loadDiscoveryData() {
     const gridEl = document.getElementById('workflows-grid');
 
     try {
-        loadingEl.style.display = 'block';
-        errorEl.style.display = 'none';
+        loadingEl.classList.remove('hidden');
+        errorEl.classList.add('hidden');
 
         // Load workflows
         const workflowsRes = await fetch('/api/discovery/workflows');
@@ -25,15 +25,15 @@ async function loadDiscoveryData() {
             document.getElementById('metric-instances').textContent = statsData.total_workflow_instances;
         }
 
-        loadingEl.style.display = 'none';
+        loadingEl.classList.add('hidden');
 
         // Render workflows
         renderWorkflows(workflowsData.workflows);
 
     } catch (err) {
         console.error('Discovery load error:', err);
-        loadingEl.style.display = 'none';
-        errorEl.style.display = 'block';
+        loadingEl.classList.add('hidden');
+        errorEl.classList.remove('hidden');
     }
 }
 
@@ -87,7 +87,7 @@ function renderWorkflows(workflows) {
                     Explore
                 </button>
                 ${w.name.toLowerCase().includes('refund') ?
-                    `<a href="/execution" class="btn btn-primary">Run Automation</a>`
+                    `<button class="btn btn-primary run-refund-btn" type="button">Run Automation</button>`
                     : ''}
             </div>
         </div>
@@ -100,6 +100,31 @@ function renderWorkflows(workflows) {
             window.location.href = `/workflow/${workflowId}`;
         });
     });
+
+    document.querySelectorAll('.run-refund-btn').forEach(btn => {
+        btn.addEventListener('click', () => startRefundExecution(btn));
+    });
+}
+
+async function startRefundExecution(button) {
+    button.disabled = true;
+    button.textContent = 'Starting...';
+    try {
+        // Discovery IDs describe observed patterns; executable workflow IDs come from /api/workflows.
+        const data = await api.getWorkflows();
+        const refund = (data.workflows || []).find(w => w.name === 'Refund Verification');
+        if (!refund) throw new Error('Refund Verification workflow is unavailable');
+        const execution = await api.createExecution({
+            workflow_id: refund.id,
+            ticket_id: 2048,
+            refund_amount: 32000
+        });
+        window.location.href = `/execution/${execution.id}`;
+    } catch (error) {
+        ui.showError('Failed to start automation', error);
+        button.disabled = false;
+        button.textContent = 'Run Automation';
+    }
 }
 
 function scoreColor(score) {
@@ -128,7 +153,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const retryBtn = document.getElementById('retry-btn');
     if (retryBtn) {
         retryBtn.addEventListener('click', function() {
-            document.getElementById('workflows-error').style.display = 'none';
+            document.getElementById('workflows-error').classList.add('hidden');
             loadDiscoveryData();
         });
     }

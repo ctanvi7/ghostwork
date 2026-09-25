@@ -1,4 +1,5 @@
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -65,6 +66,18 @@ class RequestIdFilter(logging.Filter):
         return True
 
 
+class VoiceTokenFilter(logging.Filter):
+    """Keep one-time callback tokens out of local HTTP access logs."""
+
+    def filter(self, record):
+        redact = lambda value: re.sub(r"([?&]token=)[^&\s]+", r"\1[redacted]", value)
+        if isinstance(record.msg, str):
+            record.msg = redact(record.msg)
+        if isinstance(record.args, tuple):
+            record.args = tuple(redact(arg) if isinstance(arg, str) else arg for arg in record.args)
+        return True
+
+
 def setup_logging(app: Flask) -> None:
     """Configure structured logging with request IDs."""
     handler = logging.StreamHandler()
@@ -76,6 +89,9 @@ def setup_logging(app: Flask) -> None:
     handler.setFormatter(formatter)
     app.logger.addHandler(handler)
     app.logger.setLevel(logging.INFO)
+    access_logger = logging.getLogger("werkzeug")
+    if not any(isinstance(existing, VoiceTokenFilter) for existing in access_logger.filters):
+        access_logger.addFilter(VoiceTokenFilter())
 
 
 def setup_request_id_middleware(app: Flask) -> None:
@@ -99,7 +115,7 @@ def setup_security_headers(app: Flask) -> None:
 
     @app.after_request
     def add_security_headers(response):
-        response.headers["Content-Security-Policy"] = "default-src 'self'"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; style-src 'self' 'unsafe-inline'"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "same-origin"
@@ -194,12 +210,14 @@ def register_blueprints(app: Flask) -> None:
     from routes.executions import executions_bp
     from routes.pages import pages_bp
     from routes.workflows import workflows_bp
+    from routes.voice import voice_bp
 
     app.register_blueprint(executions_bp)
     app.register_blueprint(workflows_bp)
     app.register_blueprint(approvals_bp)
     app.register_blueprint(discovery_bp)
     app.register_blueprint(pages_bp)
+    app.register_blueprint(voice_bp)
 
 
 def register_health_routes(app: Flask) -> None:
@@ -235,4 +253,4 @@ def register_health_routes(app: Flask) -> None:
 
 if __name__ == "__main__":
     app = create_app()
-    app.run(debug=True)
+    app.run(debug=Config.DEBUG)

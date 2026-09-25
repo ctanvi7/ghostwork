@@ -35,31 +35,31 @@
 - [ ] Generate GhostSkill JSON
 
 ## P1 — Verification
-- [ ] Verify Freshdesk final state
-- [ ] Verify approval record
-- [ ] Mark execution VERIFIED/FAILED
+- [x] Verify Freshdesk final state when a live write occurs
+- [x] Verify required approval record
+- [x] Record verification result and mark execution COMPLETED/FAILED
 
 ## P1 — Voice Approval
 - [ ] Sarvam STT local test
 - [ ] Sarvam TTS local test
 - [ ] Vobiz outbound-call test
-- [ ] Vobiz webhook test
-- [ ] Connect TTS audio to call
-- [ ] Capture/forward spoken response
-- [ ] STT transcript
-- [ ] Parse approve/reject intent
-- [ ] Require confirmation
-- [ ] DTMF fallback
-- [ ] Web fallback
+- [x] Vobiz webhook test (mocked provider callback)
+- [x] Connect TTS audio to call
+- [x] Capture/forward spoken response
+- [x] STT transcript (mocked provider response)
+- [x] Parse approve/reject intent
+- [x] Require confirmation
+- [x] DTMF fallback
+- [x] Web fallback
 
 ## P2 — Polish
-- [ ] Dashboard
-- [ ] Integrations status page
-- [ ] Loading states
-- [ ] Error states
-- [ ] Impact screen
+- [x] Dashboard
+- [x] Integrations status page
+- [x] Loading states
+- [x] Error states
+- [x] Impact screen with labeled demo estimates
 - [ ] README screenshots
-- [ ] Clean demo dataset
+- [x] Clean synthetic, metadata-only demo dataset
 
 ## Pre-Demo Validation
 - [ ] ₹10,000 refund proceeds automatically

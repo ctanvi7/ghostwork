@@ -3,6 +3,7 @@
 import logging
 from typing import Any, Dict, Optional
 
+from app import InvalidStateError
 from orchestrator.state import transition
 from services.supabase_service import get_service
 
@@ -43,16 +44,27 @@ def decide(
         logger.error(f"No open approval for execution {execution_id}")
         raise ValueError(f"No open approval for execution {execution_id}")
 
-    if decision.lower() == "approve":
-        # Update the approval to APPROVED
-        service.update_approval(
-            approval["id"],
-            status="APPROVED",
-            approver=approver,
-            channel=channel,
-            raw_response_json=raw_response
-        )
+    if execution.get("status") != "WAITING_FOR_APPROVAL":
+        raise InvalidStateError("Execution is not waiting for approval")
 
+    decision = decision.lower()
+    if decision not in ("approve", "reject"):
+        raise ValueError(f"Invalid decision: {decision}")
+    target = "APPROVED" if decision == "approve" else "REJECTED"
+    if not service.transition_approval(
+        approval["id"], approval["status"], target,
+        approver=approver, channel=channel, raw_response_json=raw_response,
+    ):
+        raise InvalidStateError("Approval was already decided")
+
+    try:
+        transition(execution_id, "WAITING_FOR_APPROVAL", target)
+    except Exception:
+        # A failed state transition must not leave a decided approval on a waiting run.
+        service.transition_approval(approval["id"], target, "PENDING", decided_at=None)
+        raise
+
+    if decision == "approve":
         # Update the approval_gate execution step to reflect the approved state
         # Find the approval_gate step and update its output
         steps = service.get_execution_steps(execution_id)
@@ -68,35 +80,9 @@ def decide(
                 logger.info(f"Execution {execution_id}: updated approval_gate step output to reflect approval")
                 break
 
-        # Transition execution: WAITING_FOR_APPROVAL -> APPROVED
-        try:
-            transition(execution_id, "WAITING_FOR_APPROVAL", "APPROVED")
-        except Exception as e:
-            logger.error(f"Failed to transition execution to APPROVED: {e}")
-            raise
-
         logger.info(f"Execution {execution_id}: approved by {approver}")
         return service.get_execution(execution_id)
 
-    elif decision.lower() == "reject":
-        # Update the approval to REJECTED
-        service.update_approval(
-            approval["id"],
-            status="REJECTED",
-            approver=approver,
-            channel=channel,
-            raw_response_json=raw_response
-        )
-
-        # Transition execution: WAITING_FOR_APPROVAL -> REJECTED
-        try:
-            transition(execution_id, "WAITING_FOR_APPROVAL", "REJECTED")
-        except Exception as e:
-            logger.error(f"Failed to transition execution to REJECTED: {e}")
-            raise
-
+    else:
         logger.info(f"Execution {execution_id}: rejected by {approver}")
         return service.get_execution(execution_id)
-
-    else:
-        raise ValueError(f"Invalid decision: {decision}")

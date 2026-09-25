@@ -19,6 +19,10 @@ const api = (() => {
 
         try {
             const response = await fetch(`${BASE_URL}${path}`, options);
+            const contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+                throw new Error(`Server returned ${response.status} without JSON. Check the Flask server log.`);
+            }
             const data = await response.json();
 
             if (!response.ok) {
@@ -60,6 +64,10 @@ const api = (() => {
 
         rejectExecution(approvalId) {
             return request('POST', `/approvals/${approvalId}/reject`);
+        },
+
+        callApprover(executionId) {
+            return request('POST', `/executions/${executionId}/call-approver`);
         }
     };
 })();

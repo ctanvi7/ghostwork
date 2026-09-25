@@ -267,6 +267,11 @@
     color: var(--color-primary);
 }
 
+.impact-note, .verification-note {
+    color: var(--color-text-light);
+    margin-bottom: var(--space-lg);
+}
+
 .metrics-detail {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -426,6 +431,11 @@
 .comp-weight {
     font-size: var(--font-size-xs);
     color: var(--color-text-light);
+}
+
+/* Utility */
+.hidden {
+    display: none !important;
 }
 
 /* Loading & Error States */

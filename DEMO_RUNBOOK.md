@@ -24,7 +24,7 @@
 10. Click `Call Approver`.
 11. Vobiz calls the manager.
 12. Sarvam speaks the approval request.
-13. Manager confirms approval by voice or DTMF.
+13. Manager says "approve" or presses 1, then presses 1 again to confirm. Pressing 2 rejects.
 14. Execution resumes.
 15. Freshdesk is updated.
 16. Verification Agent checks the final state.
@@ -33,10 +33,16 @@
 
 ## Fallbacks
 ### If Sarvam speech recognition fails
-Use DTMF 1 to approve.
+Press 1 to request approval, then 1 again to confirm. Press 2 to reject.
 
 ### If Vobiz fails
 Use web approval.
+
+### Voice prerequisites
+Set `VOBIZ_AUTH_ID`, `VOBIZ_AUTH_TOKEN`, `VOBIZ_FROM_NUMBER`,
+`APPROVER_PHONE`, and an HTTPS `PUBLIC_BASE_URL` reachable by Vobiz.
+Set `SARVAM_API_KEY` for generated prompts and spoken responses. A local
+`http://localhost:5000` URL cannot receive provider callbacks.
 
 ### If Claude fails
 Use cached/deterministic policy result and continue.

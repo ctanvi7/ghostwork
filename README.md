@@ -136,3 +136,31 @@ Claude can understand and explain. It cannot override enterprise approval rules.
 
 ## Status
 Hackathon prototype in active development.
+
+## Voice approval setup
+
+Voice calling is optional. Set `VOBIZ_AUTH_ID`, `VOBIZ_AUTH_TOKEN`,
+`VOBIZ_FROM_NUMBER`, `APPROVER_PHONE`, and a provider-reachable HTTPS
+`PUBLIC_BASE_URL` in `.env`. The old `VOBIZ_API_KEY` name is accepted as an
+auth-token fallback, but an auth ID is still required. Set `SARVAM_API_KEY`
+to use Sarvam prompts and speech recognition. Localhost is not a public
+callback URL; use an HTTPS tunnel for a local live-call test.
+
+On a refund above the limit, click **Call Approver**. Vobiz reads the request
+using Sarvam TTS when available, or its built-in speech fallback. Press 1
+to request approval, then press 1 again to confirm. Press 2 to reject.
+Spoken approval is transcribed by Sarvam and still requires a second DTMF
+confirmation. Ambiguous speech, failed transcription, and failed calls leave
+the execution waiting so web approval can be used.
+
+The execution page shows estimated impact after completion. Those values are
+demo estimates; it separately reports whether Freshdesk write-back was
+verified. The in-memory backend loses executions when the server restarts.
+Supabase remains the durable backend.
+
+The discovery dataset in `data/activity_events.json` is synthetic operational
+metadata (43 events across 8 sessions). It contains no ticket text, customer
+name, phone number, or credential.
+
+Voice integration tests use mocked provider responses. A live test needs
+real credentials, an approver phone, and a public HTTPS callback.

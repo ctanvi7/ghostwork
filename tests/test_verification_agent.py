@@ -13,6 +13,24 @@ from services.freshdesk_service import (
 class TestVerificationAgent:
     """Test verification agent external action verification."""
 
+    def test_required_approval_record_is_verified(self, app):
+        from agents.verification_agent import run
+        from services.supabase_service import get_service
+
+        service = get_service()
+        execution_id = service.create_execution(1, ticket_id=2048, refund_amount=32000)
+        execution = service.get_execution(execution_id)
+        context = {"communication_agent": {"result": {"action_performed": False, "source": "fallback"}}}
+
+        missing = run(execution, context)
+        assert missing["status"] == "FAILED"
+        assert missing["result"]["verification_status"] == "approval_missing"
+
+        approval_id = service.create_approval(execution_id, amount=32000)
+        service.update_approval(approval_id, status="APPROVED")
+        approved = run(execution, context)
+        assert approved["status"] == "SUCCESS"
+
     def test_successful_note_verification(self):
         """Successfully verifies that note was created on Freshdesk."""
         from agents.verification_agent import run

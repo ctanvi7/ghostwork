@@ -119,6 +119,24 @@ class TestIntegrationsAPIContract:
 class TestUIResponseIntegration:
     """Test that UI can properly consume the API responses."""
 
+    def test_execution_page_requires_id(self, client):
+        response = client.get("/execution")
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/executions")
+
+    def test_execution_detail_links_to_json_record(self, client):
+        from services.supabase_service import get_service
+
+        execution_id = get_service().create_execution(1, ticket_id=2048, refund_amount=32000)
+        page = client.get(f"/execution/{execution_id}")
+        record = client.get(f"/api/executions/{execution_id}")
+
+        assert page.status_code == 200
+        assert f'data-execution-id="{execution_id}"' in page.get_data(as_text=True)
+        assert record.status_code == 200
+        assert record.is_json
+        assert record.get_json()["id"] == execution_id
+
     def test_discovery_page_loads(self, client):
         """Discovery page HTML loads without error."""
         response = client.get("/")

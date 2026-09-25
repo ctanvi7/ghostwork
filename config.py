@@ -1,6 +1,7 @@
 import os
 from decimal import Decimal
 from typing import Dict, List
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -30,7 +31,9 @@ class Config:
     FRESHDESK_API_KEY = os.getenv("FRESHDESK_API_KEY")
     FRESHDESK_FALLBACK = os.getenv("FRESHDESK_FALLBACK")  # "cache" or None
     SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
-    VOBIZ_API_KEY = os.getenv("VOBIZ_API_KEY")
+    VOBIZ_API_KEY = os.getenv("VOBIZ_API_KEY")  # Legacy name for the auth token
+    VOBIZ_AUTH_ID = os.getenv("VOBIZ_AUTH_ID")
+    VOBIZ_AUTH_TOKEN = os.getenv("VOBIZ_AUTH_TOKEN") or VOBIZ_API_KEY
     VOBIZ_FROM_NUMBER = os.getenv("VOBIZ_FROM_NUMBER")
     APPROVER_PHONE = os.getenv("APPROVER_PHONE")
 
@@ -55,9 +58,9 @@ class Config:
         """
         has_freshdesk = bool(cls.FRESHDESK_DOMAIN and cls.FRESHDESK_API_KEY)
         has_claude = bool(cls.ANTHROPIC_API_KEY)
-        has_vobiz = bool(cls.VOBIZ_API_KEY)
+        has_vobiz = cls.voice_call_configured()
 
-        if has_freshdesk and has_claude and has_vobiz:
+        if has_freshdesk and has_claude and has_vobiz and bool(cls.SARVAM_API_KEY):
             return "A"
         elif has_freshdesk and has_claude:
             return "B"
@@ -71,9 +74,24 @@ class Config:
             "supabase": bool(cls.SUPABASE_URL and cls.SUPABASE_KEY),
             "freshdesk": bool(cls.FRESHDESK_DOMAIN and cls.FRESHDESK_API_KEY),
             "claude": bool(cls.ANTHROPIC_API_KEY),
-            "vobiz": bool(cls.VOBIZ_API_KEY),
+            "vobiz": cls.voice_call_configured(),
             "sarvam": bool(cls.SARVAM_API_KEY),
         }
+
+    @classmethod
+    def voice_call_configured(cls) -> bool:
+        """A call needs credentials, numbers, and a provider-reachable callback."""
+        callback_host = urlparse(cls.PUBLIC_BASE_URL).hostname
+        return bool(
+            cls.VOBIZ_AUTH_ID
+            and cls.VOBIZ_AUTH_TOKEN
+            and cls.VOBIZ_FROM_NUMBER
+            and cls.APPROVER_PHONE
+            and cls.PUBLIC_BASE_URL.startswith("https://")
+            and callback_host not in ("localhost", "127.0.0.1", "::1")
+            and "..." not in cls.VOBIZ_FROM_NUMBER
+            and "..." not in cls.APPROVER_PHONE
+        )
 
     @classmethod
     def validate_at_startup(cls) -> List[str]:

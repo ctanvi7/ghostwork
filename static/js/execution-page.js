@@ -6,6 +6,10 @@ const executionId = parseInt(document.querySelector('script[data-execution-id]')
 let pollInterval = null;
 
 async function loadExecution() {
+    if (!Number.isInteger(executionId) || executionId < 1) {
+        ui.showError('Failed to load execution', new Error('Select a run from the Executions page.'));
+        return;
+    }
     try {
         const execution = await api.getExecution(executionId);
         renderExecution(execution);
@@ -60,13 +64,16 @@ function renderExecution(execution) {
                     <div class="approval-buttons">
                         <button id="approve-btn" class="btn btn-success">Approve</button>
                         <button id="reject-btn" class="btn btn-danger">Reject</button>
+                        <button id="call-btn" class="btn btn-secondary">Call Approver</button>
                     </div>
+                    ${approval.channel === 'voice' ? '<p class="verification-note">Approval call requested. Web approval remains available.</p>' : ''}
                 </section>
             `;
         }
     }
 
     const stepsHtml = renderSteps(execution.steps || []);
+    const impactHtml = renderImpact(execution);
 
     container.innerHTML = `
         <div class="execution-header">
@@ -84,11 +91,13 @@ function renderExecution(execution) {
         </section>
 
         ${approvalHtml}
+        ${impactHtml}
     `;
 
     // Add event listeners for approval buttons
     const approveBtn = document.getElementById('approve-btn');
     const rejectBtn = document.getElementById('reject-btn');
+    const callBtn = document.getElementById('call-btn');
 
     if (approveBtn) {
         approveBtn.addEventListener('click', async () => {
@@ -101,6 +110,41 @@ function renderExecution(execution) {
             await rejectExecution();
         });
     }
+    if (callBtn) {
+        callBtn.addEventListener('click', async () => {
+            callBtn.disabled = true;
+            callBtn.textContent = 'Calling...';
+            try {
+                await api.callApprover(executionId);
+                ui.showSuccess('Approval call started. Web approval remains available.');
+            } catch (error) {
+                ui.showError('Call unavailable', error);
+                callBtn.disabled = false;
+                callBtn.textContent = 'Call Approver';
+            }
+        });
+    }
+}
+
+function renderImpact(execution) {
+    if (execution.status !== 'COMPLETED') return '';
+    const verification = (execution.steps || []).find(step => step.step_name === 'verification_agent');
+    const verified = verification?.output_json?.verified === true;
+    const verificationText = verified
+        ? 'Freshdesk write-back verified'
+        : 'External write-back was not verified in this demo run';
+    return `
+        <section class="section impact-section">
+            <h3>Estimated impact</h3>
+            <p class="impact-note">Demo estimates; measured results require a live workflow study.</p>
+            <div class="metrics-grid">
+                <div class="metric-card"><span class="metric-label">Manual time</span><strong class="metric-value">11m 07s</strong></div>
+                <div class="metric-card"><span class="metric-label">Automated time</span><strong class="metric-value">1m 48s</strong></div>
+                <div class="metric-card"><span class="metric-label">Human touches</span><strong class="metric-value">6 → 1</strong></div>
+            </div>
+            <p class="verification-note">${verificationText}</p>
+        </section>
+    `;
 }
 
 function renderSteps(steps) {

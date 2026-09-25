@@ -3,7 +3,11 @@
     "allow": [
       "Bash(git config *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(curl -s -w \"\\\\nHTTP_STATUS:%{http_code}\\\\n\" http://127.0.0.1:5000/api/executions)",
+      "Bash(chromium-cli --session ghostwork)",
+      "Bash(pip show *)",
+      "Bash(python -c \"import playwright\")"
     ]
   }
 }

@@ -13,13 +13,13 @@ async function loadExecutions() {
         const executions = Array.isArray(data.executions) ? data.executions : [];
         renderExecutions(executions);
 
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('content').style.display = 'block';
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('content').classList.remove('hidden');
 
     } catch (err) {
         console.error('Executions load error:', err);
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('error').style.display = 'block';
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('error').classList.remove('hidden');
     }
 }
 
@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const retryBtn = document.getElementById('retry-btn');
     if (retryBtn) {
         retryBtn.addEventListener('click', function() {
-            document.getElementById('error').style.display = 'none';
+            document.getElementById('error').classList.add('hidden');
             loadExecutions();
         });
     }

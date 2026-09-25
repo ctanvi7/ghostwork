@@ -229,12 +229,13 @@ class SupabaseService:
             )
 
         try:
-            # Supabase CAS: fetch current, verify status, then update if match
-            current = self._supabase_client.table("executions").select("status").eq("id", execution_id).execute()
-            if not current.data or current.data[0]["status"] != from_status:
-                return 0
-
-            response = self._supabase_client.table("executions").update(update_data).eq("id", execution_id).execute()
+            response = (
+                self._supabase_client.table("executions")
+                .update(update_data)
+                .eq("id", execution_id)
+                .eq("status", from_status)
+                .execute()
+            )
             return len(response.data) if response.data else 0
         except Exception as e:
             logger.error(f"Failed to transition execution {execution_id} from {from_status} to {to_status}: {e}")
@@ -447,7 +448,8 @@ class SupabaseService:
 
     def update_approval(self, approval_id: int, **fields) -> int:
         """Update an approval record."""
-        fields["decided_at"] = datetime.now(timezone.utc).isoformat()
+        if fields.get("status") in ("APPROVED", "REJECTED", "EXPIRED"):
+            fields["decided_at"] = datetime.now(timezone.utc).isoformat()
 
         if self.backend == "memory":
             return self._get_store().update("approvals", approval_id, fields)
@@ -461,6 +463,23 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Failed to update approval {approval_id}: {e}")
             raise
+
+    def transition_approval(self, approval_id: int, from_status: str, to_status: str, **fields) -> int:
+        """Atomically claim an approval decision or update pending voice metadata."""
+        data = {"status": to_status, **fields}
+        if to_status in ("APPROVED", "REJECTED", "EXPIRED"):
+            data["decided_at"] = datetime.now(timezone.utc).isoformat()
+        if self.backend == "memory":
+            return self._get_store().update_if("approvals", approval_id, {"status": from_status}, data)
+        data = self._map_raw_response(data)
+        response = (
+            self._supabase_client.table("approvals")
+            .update(data)
+            .eq("id", approval_id)
+            .eq("status", from_status)
+            .execute()
+        )
+        return len(response.data) if response.data else 0
 
     # Audit events
     def log_audit_event(
