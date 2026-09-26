@@ -23,21 +23,19 @@ class FakeResponse:
         return self.data
 
 
-def test_sarvam_tts_and_stt_validate_responses(monkeypatch):
+def test_sarvam_tts_validates_response(monkeypatch):
     monkeypatch.setattr(Config, "SARVAM_API_KEY", "test-key")
     calls = []
 
     def fake_post(url, **kwargs):
         calls.append((url, kwargs))
-        if url.endswith("text-to-speech"):
-            return FakeResponse({"audios": [base64.b64encode(b"RIFF-audio").decode()]})
-        return FakeResponse({"transcript": "I approve", "language_code": "en-IN"})
+        return FakeResponse({"audios": [base64.b64encode(b"RIFF-audio").decode()]})
 
     monkeypatch.setattr(sarvam_service.requests, "post", fake_post)
     assert sarvam_service.synthesize("Approve refund") == b"RIFF-audio"
-    assert sarvam_service.transcribe(b"audio") == "I approve"
+    assert calls[0][0].endswith("text-to-speech")
     assert calls[0][1]["headers"]["api-subscription-key"] == "test-key"
-    assert calls[1][1]["data"]["mode"] == "translate"
+    assert calls[0][1]["json"]["speech_sample_rate"] == 8000  # telephony audio
     assert all("timeout" in kwargs for _, kwargs in calls)
 
 
@@ -46,9 +44,6 @@ def test_sarvam_malformed_response_fails_closed(monkeypatch):
     monkeypatch.setattr(sarvam_service.requests, "post", lambda *args, **kwargs: FakeResponse({"audios": []}))
     with pytest.raises(sarvam_service.SarvamError):
         sarvam_service.synthesize("Approve")
-    monkeypatch.setattr(sarvam_service.requests, "post", lambda *args, **kwargs: FakeResponse({"transcript": ""}))
-    with pytest.raises(sarvam_service.SarvamError):
-        sarvam_service.transcribe(b"audio")
 
 
 def test_vobiz_call_uses_authenticated_api_and_validates_id(monkeypatch):
@@ -75,18 +70,9 @@ def test_vobiz_call_uses_authenticated_api_and_validates_id(monkeypatch):
             "https://demo.example.org/answer", "https://demo.example.org/hangup", "+912222222222")
 
 
-def test_recording_download_rejects_untrusted_hosts_and_redirects(monkeypatch):
-    with pytest.raises(vobiz_service.VobizError):
-        vobiz_service.fetch_recording("http://127.0.0.1/private")
-    with pytest.raises(vobiz_service.VobizError):
-        vobiz_service.fetch_recording("https://api.vobiz.ai.evil.example/recording")
-    monkeypatch.setattr(vobiz_service.requests, "get", lambda *args, **kwargs: FakeResponse({}, status_code=302))
-    with pytest.raises(vobiz_service.VobizError):
-        vobiz_service.fetch_recording("https://api.vobiz.ai/recording")
-
-
 def test_access_log_redacts_voice_callback_token():
     import logging
+
     from app import VoiceTokenFilter
 
     record = logging.LogRecord(

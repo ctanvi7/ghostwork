@@ -75,6 +75,31 @@ class MemoryStore:
             self.tables["ghost_skills"].append(skill)
             self._id_counters["ghost_skills"] = 1
 
+            # Second workflow: Windows Troubleshooting (no approval gate - advice only).
+            it_workflow = {
+                "id": 2,
+                "name": "Windows Troubleshooting",
+                "description": "Diagnose common Windows issues and reply with troubleshooting steps",
+                "ghost_score": 69.0,
+                "frequency": 5,
+                "manual_duration_seconds": 480,
+                "automation_percentage": 100.0,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            self.tables["workflows"].append(it_workflow)
+            self._id_counters["workflows"] = 2
+
+            it_steps = [
+                {"id": 9, "workflow_id": 2, "step_order": 1, "name": "context_agent", "agent": "context_agent", "classification": "ASSISTED", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": 10, "workflow_id": 2, "step_order": 2, "name": "diagnosis_agent", "agent": "diagnosis_agent", "classification": "AUTOMATABLE", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": 11, "workflow_id": 2, "step_order": 3, "name": "it_communication_agent", "agent": "it_communication_agent", "classification": "AUTOMATABLE", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": 12, "workflow_id": 2, "step_order": 4, "name": "it_verification_agent", "agent": "it_verification_agent", "classification": "AUTOMATABLE", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": 13, "workflow_id": 2, "step_order": 5, "name": "it_closure_agent", "agent": "it_closure_agent", "classification": "AUTOMATABLE", "created_at": datetime.now(timezone.utc).isoformat()},
+            ]
+            self.tables["workflow_steps"].extend(it_steps)
+            self._id_counters["workflow_steps"] = 13
+
     def insert(self, table: str, data: Dict[str, Any]) -> int:
         """Insert a row, auto-increment ID."""
         with self._lock:

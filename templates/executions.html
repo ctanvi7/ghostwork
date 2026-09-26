@@ -1,28 +1,3 @@
 {% extends "base.html" %}
-
-{% block title %}Executions — GhostWork{% endblock %}
-
-{% block content %}
-<div class="executions-page">
-    <section class="page-header">
-        <h1>Executions</h1>
-        <p class="page-subtitle">Autonomous workflow runs and their results.</p>
-    </section>
-
-    <div id="loading" class="loading-state">
-        <p>Loading executions...</p>
-    </div>
-
-    <div id="error" class="error-state hidden">
-        <p>Unable to load executions. <button id="retry-btn">Try again</button></p>
-    </div>
-
-    <div id="content" class="hidden">
-        <div class="executions-list" id="executions-list">
-            <!-- Populated by JavaScript -->
-        </div>
-    </div>
-</div>
-
-<script src="{{ url_for('static', filename='js/executions.js') }}"></script>
-{% endblock %}
+{% block title %}Executions | GhostWork{% endblock %}
+{% block content %}<div class="executions-page"><header class="page-header"><p class="eyebrow">Workflow history</p><h1>Executions</h1><p class="page-subtitle">Track each run, its current stage and its final outcome.</p></header><div id="loading" class="skeleton-panel" aria-label="Loading executions"><div class="skeleton short"></div><div class="skeleton medium"></div><div class="skeleton"></div></div><div id="error" class="error-state hidden" role="alert">Executions could not be loaded. <button id="retry-btn" type="button">Try again</button></div><div id="content" class="hidden"><div class="executions-list" id="executions-list"></div></div></div><script src="{{ url_for('static', filename='js/executions.js') }}"></script>{% endblock %}

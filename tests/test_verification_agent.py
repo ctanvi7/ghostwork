@@ -313,7 +313,7 @@ class TestVerifyNoteExistsFunction:
                 mock_response = MagicMock()
                 mock_response.status_code = 200
                 mock_response.ok = True
-                mock_response.json.return_value = mock_response_data
+                mock_response.json.return_value = mock_response_data["conversations"]  # GET /tickets/{id}/conversations returns a list
                 mock_get.return_value = mock_response
 
                 result = verify_note_exists(2048, expected_note_id=12345)
@@ -342,7 +342,7 @@ class TestVerifyNoteExistsFunction:
                 mock_response = MagicMock()
                 mock_response.status_code = 200
                 mock_response.ok = True
-                mock_response.json.return_value = mock_response_data
+                mock_response.json.return_value = mock_response_data["conversations"]  # GET /tickets/{id}/conversations returns a list
                 mock_get.return_value = mock_response
 
                 result = verify_note_exists(2048, execution_reference="exec-001")
@@ -371,7 +371,7 @@ class TestVerifyNoteExistsFunction:
                 mock_response = MagicMock()
                 mock_response.status_code = 200
                 mock_response.ok = True
-                mock_response.json.return_value = mock_response_data
+                mock_response.json.return_value = mock_response_data["conversations"]  # GET /tickets/{id}/conversations returns a list
                 mock_get.return_value = mock_response
 
                 result = verify_note_exists(2048, expected_note_id=12345)

@@ -39,8 +39,8 @@ Expected flow:
 5. Risk Agent applies deterministic rules.
 6. Because ₹32,000 > ₹25,000, execution pauses.
 7. Human approval is requested through the web UI or Vobiz voice call.
-8. Sarvam provides speech-to-text/text-to-speech for multilingual approval.
-9. On confirmed approval, execution resumes.
+8. Sarvam text-to-speech reads the approval request in the approver's language.
+9. On approval (key press 1), execution resumes.
 10. Freshdesk is updated.
 11. Communication Agent prepares/sends the customer response.
 12. Verification Agent confirms the final Freshdesk state.
@@ -118,13 +118,13 @@ A high-risk action must pause before execution.
 ### F8. Vobiz Voice Approval
 - Initiate an outbound approval call.
 - Read approval message to the manager.
-- Receive speech/DTMF response.
-- Require a second confirmation for high-value approval.
-- DTMF fallback: press 1 to approve, 2 to reject.
+- Receive a single key press (DTMF): 1 = approve, 2 = reject.
+- Speech is not interpreted; any other key repeats the prompt.
+- No key press leaves the approval pending for web approval.
 
 ### F9. Sarvam Voice Layer
 - Text-to-speech for approval prompts.
-- Speech-to-text for manager responses.
+- Translation of prompts into the approver's Freshdesk language.
 - Support English and at least one Indian-language/code-mixed path where practical.
 
 ### F10. Claude Reasoning
@@ -187,7 +187,7 @@ Must-have:
 
 High-value extension:
 - Vobiz outbound approval call
-- Sarvam STT/TTS
+- Sarvam TTS
 - Freshdesk event/webhook trigger
 
 Out of scope for MVP:

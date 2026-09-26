@@ -67,9 +67,7 @@ def get_workflow(workflow_id: int):
     if not workflow:
         raise NotFoundError(f"Workflow {workflow_id} not found")
 
-    # In Phase 2, we don't load steps from the DB yet
-    # They'll be loaded in the orchestrator/workflow.py when needed
-    # For now, return empty list
-    steps = []
+    steps = service.select("workflow_steps", {"workflow_id": workflow_id})
+    steps.sort(key=lambda s: s.get("step_order", 0))
 
     return jsonify({"workflow": workflow, "steps": steps}), 200

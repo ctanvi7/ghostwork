@@ -89,7 +89,23 @@ def test_refuses_when_no_assignee_number_and_no_fallback():
 
 def test_freshdesk_error_does_not_call_a_wrong_number():
     with patch("services.freshdesk_service.get_ticket", side_effect=FreshDeskError("down")), \
-         pytest.raises(ApproverUnavailableError, match="lookup failed"):
+         pytest.raises(ApproverUnavailableError, match="could not read ticket #3.*down"):
+        resolve_approver(3)
+
+
+def test_ticket_not_found_gives_a_specific_reason_not_a_generic_one():
+    """A stale execution pointing at a since-renumbered/deleted ticket must say so clearly."""
+    with patch("services.freshdesk_service.get_ticket",
+               side_effect=FreshDeskError("Ticket 2048 not found")), \
+         pytest.raises(ApproverUnavailableError, match="Ticket 2048 not found"):
+        resolve_approver(2048)
+
+
+def test_agent_lookup_failure_is_distinguished_from_ticket_lookup_failure():
+    ticket, _ = _freshdesk(responder_id=55)
+    with ticket, patch("services.freshdesk_service.get_agent_contact",
+                       side_effect=FreshDeskError("agent API down")), \
+         pytest.raises(ApproverUnavailableError, match="could not read the assigned agent.*agent API down"):
         resolve_approver(3)
 
 

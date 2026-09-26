@@ -203,6 +203,31 @@ class TestLowRiskAndAmountSource:
         assert execution["status"] == "WAITING_FOR_APPROVAL"
         assert _step(execution, "context_agent")["output_json"]["refund_amount_source"] == "freshdesk_custom_field"
 
+    def test_request_amount_cannot_override_freshdesk_field(self, client, mcp):
+        """A small amount in the request must not skip approval for a large Freshdesk refund."""
+        mcp["ticket"] = _ticket({"cf_refund_amount": 32000})
+        execution = _start(client, refund_amount=100)
+
+        assert float(execution["refund_amount"]) == 32000
+        assert execution["status"] == "WAITING_FOR_APPROVAL"
+        assert _step(execution, "risk_agent")["output_json"]["requires_approval"] is True
+        assert _step(execution, "context_agent")["output_json"]["refund_amount_source"] == "freshdesk_custom_field"
+        assert mcp["writes"] == []
+
+    def test_auto_approved_note_does_not_claim_human_approval(self, client, mcp):
+        execution = _start(client, refund_amount=10000)
+
+        assert execution["status"] == "COMPLETED"
+        body = mcp["writes"][0][1]
+        assert "approved by human reviewer" not in body
+        assert "human approval was not required" in body
+
+    def test_human_approved_note_says_so(self, client, mcp):
+        paused = _start(client, refund_amount=32000)
+        _approve(client, paused)
+
+        assert "approved by human reviewer" in mcp["writes"][0][1]
+
     def test_missing_amount_fails_closed_and_ignores_order_number(self, client, mcp):
         # Description contains "#123456"; that must never become the refund amount.
         execution = _start(client)

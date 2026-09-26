@@ -3,8 +3,17 @@
 import json
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from config import Config
 from schemas.claude_responses import TicketContext
 from services.claude_service import extract_ticket_context
+
+
+@pytest.fixture(autouse=True)
+def fake_api_key(monkeypatch):
+    """The Anthropic client is mocked; a (fake) key makes the service take the Claude path."""
+    monkeypatch.setattr(Config, "ANTHROPIC_API_KEY", "test-key")
 
 
 class TestClaudeService:

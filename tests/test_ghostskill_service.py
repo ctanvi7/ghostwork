@@ -1,19 +1,18 @@
 """Tests for GhostSkill service layer."""
 
-import pytest
-from decimal import Decimal
 from unittest.mock import MagicMock, patch
+
+import pytest
+from pydantic import ValidationError
 
 from config import Config
 from services.ghostskill_service import (
     ALLOWED_AGENTS,
-    TOOL_ACTION_TO_AGENT,
+    _generate_description,
     generate_ghostskill,
     map_signature_to_steps,
     validate_ghostskill,
-    _generate_description,
 )
-from schemas.ghostskill import GhostSkill
 
 
 class TestMapSignatureToSteps:
@@ -361,7 +360,7 @@ class TestValidateGhostskill:
             # Missing many required fields
         }
 
-        with pytest.raises(Exception):  # pydantic.ValidationError
+        with pytest.raises(ValidationError):
             validate_ghostskill(invalid_dict)
 
 
@@ -387,10 +386,11 @@ class TestGenerateDescription:
         mock_response.content = [mock_block]
         mock_client.messages.create.return_value = mock_response
 
-        # Patch Anthropic in the context where it's imported
+        # _generate_description builds its client through services.claude_service
         import services.ghostskill_service as gss_module
-        with patch.object(gss_module, "Anthropic", return_value=mock_client, create=True):
+        with patch("services.claude_service.Anthropic", return_value=mock_client):
             with patch.object(gss_module.Config, "ANTHROPIC_API_KEY", "test_key"):
                 desc = _generate_description("Test", 1)
 
-        assert len(desc) <= 150
+        assert desc == "x" * 150
+        assert mock_client.messages.create.called

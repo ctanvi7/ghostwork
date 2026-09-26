@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ legal_title }} | GhostWork{% endblock %}
+{% block content %}
+<article class="legal-page"><header class="page-header"><p class="eyebrow">GhostWork prototype</p><h1>{{ legal_title }}</h1></header>
+{% if legal_kind == 'privacy' %}
+<section class="panel"><h2>Information used</h2><p>GhostWork reads ticket and workflow information from connected services to discover patterns and execute authorized workflows. The discovery view uses ticket metadata. Execution records include workflow state, approval decisions and verification results.</p></section>
+<section class="panel"><h2>Connected services</h2><p>Freshdesk, Supabase, Claude, Vobiz and Sarvam are used when configured for their respective workflow, storage, reasoning and voice functions. Access to the application requires a signed-in account in hosted environments.</p></section>
+{% else %}
+<section class="panel"><h2>Prototype use</h2><p>GhostWork is a prototype for workflow discovery and governed automation. Use it only with accounts and tickets you are authorized to access.</p></section>
+<section class="panel"><h2>Human decisions</h2><p>Refunds above the configured autonomy limit require human approval. Approval, rejection and verification are recorded as part of the execution.</p></section>
+{% endif %}</article>
+{% endblock %}

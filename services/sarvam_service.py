@@ -1,8 +1,7 @@
-"""Small REST wrapper for Sarvam speech services."""
+"""Small REST wrapper for Sarvam text-to-speech and translation (approval call prompts)."""
 
 import base64
 import binascii
-from pathlib import PurePosixPath
 
 import requests
 
@@ -46,27 +45,30 @@ def synthesize(text: str, language_code: str = "en-IN") -> bytes:
         raise SarvamError("Sarvam TTS request failed") from exc
 
 
-def transcribe(audio: bytes, filename: str = "response.wav") -> str:
-    """Translate short English or Indic speech into English for deterministic parsing."""
+def translate(text: str, target_language_code: str, source_language_code: str = "en-IN") -> str:
+    """Translate a short prompt (e.g. English -> Hindi) so TTS can speak it natively."""
+    if target_language_code == source_language_code:
+        return text
     if not Config.SARVAM_API_KEY:
         raise SarvamError("Sarvam is not configured")
-    if not audio or len(audio) > 2_000_000:
-        raise SarvamError("Recording is empty or too large")
-    extension = PurePosixPath(filename).suffix.lower()
-    content_type = "audio/mpeg" if extension == ".mp3" else "audio/wav"
     try:
         response = requests.post(
-            f"{SARVAM_BASE_URL}/speech-to-text",
+            f"{SARVAM_BASE_URL}/translate",
             headers={"api-subscription-key": Config.SARVAM_API_KEY},
-            files={"file": (filename, audio, content_type)},
-            data={"model": "saaras:v3", "mode": "translate"},
+            json={
+                "input": text,
+                "source_language_code": source_language_code,
+                "target_language_code": target_language_code,
+                "model": "sarvam-translate:v1",
+            },
             timeout=TIMEOUT,
         )
         response.raise_for_status()
         data = response.json()
-        transcript = data.get("transcript") if isinstance(data, dict) else None
-        if not isinstance(transcript, str) or not transcript.strip():
-            raise SarvamError("Sarvam STT returned no transcript")
-        return transcript.strip()
+        translated = data.get("translated_text") if isinstance(data, dict) else None
+        if not isinstance(translated, str) or not translated.strip():
+            raise SarvamError("Sarvam translate returned no text")
+        return translated.strip()
     except (requests.RequestException, ValueError, KeyError) as exc:
-        raise SarvamError("Sarvam STT request failed") from exc
+        raise SarvamError("Sarvam translate request failed") from exc
+

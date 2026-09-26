@@ -1,6 +1,4 @@
-"""Vobiz outbound call transport and safe recording retrieval."""
-
-from urllib.parse import urlparse
+"""Vobiz outbound call transport."""
 
 import requests
 
@@ -10,7 +8,7 @@ TIMEOUT = (3, 10)
 
 
 class VobizError(Exception):
-    """Vobiz call or recording operation failed."""
+    """Vobiz call request failed."""
 
 
 def place_approval_call(answer_url: str, hangup_url: str, to_number: str) -> str:
@@ -45,21 +43,3 @@ def place_approval_call(answer_url: str, hangup_url: str, to_number: str) -> str
     except (requests.RequestException, ValueError) as exc:
         raise VobizError("Vobiz call request failed") from exc
 
-
-def fetch_recording(recording_url: str) -> bytes:
-    """Fetch only from documented Vobiz/S3 hosts; never follow redirects."""
-    parsed = urlparse(recording_url)
-    host = (parsed.hostname or "").lower()
-    allowed = host == "api.vobiz.ai" or host == "s3.amazonaws.com" or host.endswith(".s3.amazonaws.com")
-    if parsed.scheme != "https" or not allowed or parsed.username or parsed.password:
-        raise VobizError("Recording URL is not trusted")
-    try:
-        response = requests.get(recording_url, timeout=TIMEOUT, allow_redirects=False)
-        if 300 <= response.status_code < 400:
-            raise VobizError("Recording redirect is not allowed")
-        response.raise_for_status()
-        if len(response.content) > 2_000_000 or not response.content:
-            raise VobizError("Recording is empty or too large")
-        return response.content
-    except requests.RequestException as exc:
-        raise VobizError("Could not download Vobiz recording") from exc

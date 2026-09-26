@@ -1,18 +1,16 @@
 {% extends "base.html" %}
-
-{% block title %}Dashboard - GhostWork{% endblock %}
-
+{% block title %}Dashboard | GhostWork{% endblock %}
 {% block content %}
-<div class="dashboard">
-    <section class="section">
-        <h2>Discovered Workflows</h2>
-        <div id="workflows-list" class="workflows-grid">
-            <div class="workflow-card loading">
-                <p>Loading workflows...</p>
-            </div>
-        </div>
-    </section>
+<div class="dashboard-page">
+    <header class="page-header"><p class="eyebrow">Operations overview</p><h1>Dashboard</h1><p class="page-subtitle">Discovered work, active executions and decisions that need a person.</p></header>
+    <div id="dashboard-loading" class="metrics-grid" aria-label="Loading dashboard"><div class="skeleton-panel"><div class="skeleton short"></div><div class="skeleton tall"></div></div><div class="skeleton-panel"><div class="skeleton short"></div><div class="skeleton tall"></div></div><div class="skeleton-panel"><div class="skeleton short"></div><div class="skeleton tall"></div></div></div>
+    <div id="dashboard-error" class="error-state hidden" role="alert">Dashboard data could not be loaded. <button id="dashboard-retry" type="button">Try again</button></div>
+    <div id="dashboard-content" class="hidden">
+        <div class="metrics-grid" id="dashboard-metrics"></div>
+        <section class="panel"><div class="section-head"><div><h2>Needs attention</h2><p>Executions waiting at a human approval boundary.</p></div><a class="btn btn-secondary" href="/approvals">View approvals</a></div><div id="dashboard-approvals"></div></section>
+        <section class="panel"><div class="section-head"><div><h2>Recent executions</h2><p>Current state from the execution service.</p></div><a class="btn btn-secondary" href="/executions">All executions</a></div><div id="dashboard-executions"></div></section>
+        <section class="panel"><div class="section-head"><div><h2>Discovered workflows</h2><p id="dashboard-source">Loading source</p></div><a class="btn btn-secondary" href="/workflows">Explore workflows</a></div><div id="dashboard-workflows"></div></section>
+    </div>
 </div>
-
 <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}

@@ -23,7 +23,7 @@ Do not accidentally turn GhostWork into:
 5. Claude: semantic reasoning only.
 6. Deterministic Python controls all critical enterprise policies.
 7. Vobiz: telephony/call transport.
-8. Sarvam: speech-to-text and text-to-speech.
+8. Sarvam: text-to-speech (and prompt translation) for approval calls.
 9. Do not introduce LangChain, LangGraph, Celery, Redis, Kafka, Kubernetes, Neo4j, React, Next.js, or another major framework unless explicitly requested.
 10. Prefer readable functions/classes over clever abstractions.
 
@@ -76,10 +76,10 @@ Always request structured outputs and validate them.
 The voice path must be layered:
 1. Vobiz calls the approver.
 2. Sarvam TTS reads the approval request.
-3. Sarvam STT transcribes spoken response.
-4. Ambiguous speech must not approve.
-5. High-value approval requires a second confirmation.
-6. DTMF 1 = confirm approve; DTMF 2 = reject.
+3. Only a key press decides: DTMF 1 = approve; DTMF 2 = reject.
+4. Speech is never interpreted; any other key repeats the prompt.
+5. No key press leaves the approval pending.
+6. The approval still goes through the same state machine as web approval.
 7. Web approval remains a fallback.
 
 ## Freshdesk Rules

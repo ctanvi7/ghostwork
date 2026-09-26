@@ -16,35 +16,35 @@ class TestMemoryStore:
     def test_insert_workflow(self):
         """Insert a new workflow."""
         store = MemoryStore()
-        store.clear_all()  # Start fresh (reseeds with Refund Verification workflow)
+        store.clear_all()  # Start fresh (reseeds with Refund Verification + Windows Troubleshooting)
 
-        # After clear_all, the seeded workflow is ID 1, so next insert is ID 2
+        # After clear_all, seeded workflows are IDs 1-2, so next insert is ID 3
         id_val = store.insert("workflows", {"name": "Test Workflow"})
-        assert id_val == 2
+        assert id_val == 3
 
-        result = store.select_one("workflows", {"id": 2})
+        result = store.select_one("workflows", {"id": 3})
         assert result["name"] == "Test Workflow"
 
     def test_insert_auto_increments(self):
         """Inserts auto-increment ID."""
         store = MemoryStore()
-        store.clear_all()  # Reseeds with workflow ID=1
+        store.clear_all()  # Reseeds with workflow IDs 1-2
 
         id1 = store.insert("workflows", {"name": "WF1"})
         id2 = store.insert("workflows", {"name": "WF2"})
-        assert id1 == 2
-        assert id2 == 3
+        assert id1 == 3
+        assert id2 == 4
 
     def test_select_all(self):
         """Select returns all rows when no where clause."""
         store = MemoryStore()
-        store.clear_all()  # Has seeded workflow ID=1
+        store.clear_all()  # Has seeded workflow IDs 1-2
 
         store.insert("workflows", {"name": "WF1"})
         store.insert("workflows", {"name": "WF2"})
 
         rows = store.select("workflows")
-        assert len(rows) == 3  # Seeded + 2 inserted
+        assert len(rows) == 4  # 2 seeded + 2 inserted
 
     def test_select_with_where(self):
         """Select filters by where clause."""
@@ -149,8 +149,8 @@ class TestMemoryStore:
         assert count == 1
 
         rows = store.select("workflows")
-        # Seeded workflow + WF2 (WF1 was deleted)
-        assert len(rows) == 2
+        # 2 seeded workflows + WF2 (WF1 was deleted)
+        assert len(rows) == 3
         names = [r["name"] for r in rows]
         assert "WF2" in names
         assert "WF1" not in names
@@ -198,8 +198,8 @@ class TestMemoryStore:
 
         # All IDs should be unique
         assert len(set(results)) == 5
-        # Seeded workflow + 5 inserted
-        assert len(store.select("workflows")) == 6
+        # 2 seeded workflows + 5 inserted
+        assert len(store.select("workflows")) == 7
 
     def test_execution_workflow(self):
         """Test a realistic execution creation and update workflow."""

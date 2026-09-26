@@ -25,6 +25,12 @@ const api = (() => {
             }
             const data = await response.json();
 
+            // Session expired or signed out: send the user to the login page.
+            if (response.status === 401 && data.error?.code === 'UNAUTHORIZED') {
+                const next = encodeURIComponent(window.location.pathname + window.location.search);
+                window.location.href = `/login?next=${next}`;
+            }
+
             if (!response.ok) {
                 const error = new Error(data.error?.message || 'Request failed');
                 error.status = response.status;
@@ -60,6 +66,26 @@ const api = (() => {
 
         getExecution(id) {
             return request('GET', `/executions/${id}`);
+        },
+
+        listExecutions(limit = 20, offset = 0) {
+            return request('GET', `/executions?limit=${Number(limit)}&offset=${Number(offset)}`);
+        },
+
+        getDiscoveredWorkflows(minFrequency = 1) {
+            return request('GET', `/discovery/workflows?min_frequency=${Number(minFrequency)}`);
+        },
+
+        getDiscoveredWorkflow(id) {
+            return request('GET', `/discovery/workflows/${encodeURIComponent(id)}`);
+        },
+
+        getDiscoveryStats() {
+            return request('GET', '/discovery/stats');
+        },
+
+        getIntegrations() {
+            return request('GET', '/integrations');
         },
 
         approveExecution(approvalId) {

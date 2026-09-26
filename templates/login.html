@@ -1,0 +1,36 @@
+{% extends "auth_base.html" %}
+
+{% block title %}Sign in{% endblock %}
+
+{% block card %}
+<h2 class="auth-title">Sign in</h2>
+<p class="auth-subtitle">Use your GhostWork account to review and approve automations.</p>
+
+{% if error %}
+<div class="auth-alert" role="alert">{{ error }}</div>
+{% endif %}
+
+<form method="post" action="{{ url_for('auth.login') }}" class="auth-form">
+    <input type="hidden" name="next" value="{{ next_url }}">
+
+    <label class="auth-field">
+        <span>Email</span>
+        <input type="email" name="email" value="{{ email }}" autocomplete="username" required autofocus>
+    </label>
+
+    <label class="auth-field">
+        <span>Password</span>
+        <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+
+    <button type="submit" class="btn btn-primary auth-submit">Sign in</button>
+</form>
+
+<p class="auth-switch">
+    {% if registration_open %}
+    New to GhostWork? <a href="{{ url_for('auth.register_page') }}">Create an account</a>
+    {% else %}
+    Need access? Ask an administrator for an account.
+    {% endif %}
+</p>
+{% endblock %}

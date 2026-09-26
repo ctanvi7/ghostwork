@@ -1,69 +1,42 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}GhostWork — Workflow Intelligence{% endblock %}</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}GhostWork{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/design-system.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
-    <script src="{{ url_for('static', filename='js/api.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/enterprise.css') }}">
+    <script src="{{ url_for('static', filename='js/api.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/ui.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/shell.js') }}" defer></script>
 </head>
 <body>
-    <div class="app-container">
-        <!-- Sidebar Navigation -->
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <div class="logo">
-                    <span class="logo-icon">👻</span>
-                    <span class="logo-text">GhostWork</span>
-                </div>
-            </div>
-
-            <nav class="sidebar-nav">
-                <ul>
-                    <li>
-                        <a href="/" class="nav-link {% if page_name == 'discovery' %}active{% endif %}">
-                            <span class="nav-icon">📊</span>
-                            <span class="nav-label">Discovery</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/executions" class="nav-link {% if page_name == 'executions' %}active{% endif %}">
-                            <span class="nav-icon">⚙️</span>
-                            <span class="nav-label">Executions</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="#" class="nav-link disabled" title="Coming in Phase 10C">
-                            <span class="nav-icon">✨</span>
-                            <span class="nav-label">GhostSkills</span>
-                            <span class="badge">Soon</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/integrations" class="nav-link {% if page_name == 'integrations' %}active{% endif %}">
-                            <span class="nav-icon">🔗</span>
-                            <span class="nav-label">Integrations</span>
-                        </a>
-                    </li>
-                </ul>
-            </nav>
-
-            <div class="sidebar-footer">
-                <div class="status-indicator">
-                    <span class="status-dot status-ok"></span>
-                    <span class="status-text">System OK</span>
-                </div>
-                <p class="privacy-badge">🔒 Metadata-only telemetry</p>
-            </div>
-        </aside>
-
-        <!-- Main Content -->
-        <div class="main-content">
-            {% block content %}{% endblock %}
+<div class="app-container" id="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+        <div class="sidebar-header">
+            <a class="logo" href="/" aria-label="GhostWork dashboard"><span class="brand-mark" aria-hidden="true">G</span><span class="logo-text">GhostWork<span class="brand-subtitle">Workflow operations</span></span></a>
+            <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-controls="sidebar" aria-expanded="true"><span aria-hidden="true">≡</span></button>
         </div>
-    </div>
+        <nav class="sidebar-nav" aria-label="Primary">
+            <ul>
+                <li><a href="/" class="nav-link {% if page_name == 'dashboard' %}active{% endif %}" {% if page_name == 'dashboard' %}aria-current="page"{% endif %} aria-label="Dashboard" title="Dashboard"><span class="nav-icon" aria-hidden="true">▦</span><span class="nav-label">Dashboard</span></a></li>
+                <li><a href="/workflows" class="nav-link {% if page_name == 'workflows' %}active{% endif %}" {% if page_name == 'workflows' %}aria-current="page"{% endif %} aria-label="Workflows" title="Workflows"><span class="nav-icon" aria-hidden="true">≋</span><span class="nav-label">Workflows</span></a></li>
+                <li><a href="/executions" class="nav-link {% if page_name == 'executions' %}active{% endif %}" {% if page_name == 'executions' %}aria-current="page"{% endif %} aria-label="Executions" title="Executions"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">Executions</span></a></li>
+                <li><a href="/approvals" class="nav-link {% if page_name == 'approvals' %}active{% endif %}" {% if page_name == 'approvals' %}aria-current="page"{% endif %} aria-label="Approvals" title="Approvals"><span class="nav-icon" aria-hidden="true">◇</span><span class="nav-label">Approvals</span></a></li>
+                <li><a href="/integrations" class="nav-link {% if page_name == 'integrations' %}active{% endif %}" {% if page_name == 'integrations' %}aria-current="page"{% endif %} aria-label="Integrations" title="Integrations"><span class="nav-icon" aria-hidden="true">⌘</span><span class="nav-label">Integrations</span></a></li>
+            </ul>
+        </nav>
+        <div class="sidebar-footer">
+            {% if current_user %}<div class="sidebar-user"><span class="sidebar-user-name" title="{{ current_user.email }}">{{ current_user.name }}</span><form method="post" action="{{ url_for('auth.logout') }}"><button class="text-button" type="submit">Sign out</button></form></div>{% endif %}
+            <div class="footer-links"><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div>
+        </div>
+    </aside>
+    <main class="main-content" id="main-content" tabindex="-1">
+        <div id="message-region" class="message-region" aria-live="polite" aria-atomic="false"></div>
+        {% block content %}{% endblock %}
+    </main>
+</div>
 </body>
 </html>

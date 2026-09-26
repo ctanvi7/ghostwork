@@ -1,11 +1,10 @@
-import hmac
 import logging
 import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from flask import Flask, Response, jsonify, request
+from flask import Flask, jsonify, redirect, request, session, url_for
 
 from config import Config
 
@@ -71,7 +70,8 @@ class VoiceTokenFilter(logging.Filter):
     """Keep one-time callback tokens out of local HTTP access logs."""
 
     def filter(self, record):
-        redact = lambda value: re.sub(r"([?&]token=)[^&\s]+", r"\1[redacted]", value)
+        def redact(value):
+            return re.sub(r"([?&]token=)[^&\s]+", r"\1[redacted]", value)
         if isinstance(record.msg, str):
             record.msg = redact(record.msg)
         if isinstance(record.args, tuple):
@@ -90,6 +90,10 @@ def setup_logging(app: Flask) -> None:
     handler.setFormatter(formatter)
     app.logger.addHandler(handler)
     app.logger.setLevel(logging.INFO)
+    # Voice calls are only debuggable from their logs (Vobiz shows nothing), so
+    # let their INFO lines through; module loggers otherwise inherit WARNING.
+    for name in ("services.voice_approval_service", "routes.voice"):
+        logging.getLogger(name).setLevel(logging.INFO)
     access_logger = logging.getLogger("werkzeug")
     if not any(isinstance(existing, VoiceTokenFilter) for existing in access_logger.filters):
         access_logger.addFilter(VoiceTokenFilter())
@@ -111,39 +115,39 @@ def setup_request_id_middleware(app: Flask) -> None:
         return response
 
 
-# Reachable without the app password. Vobiz cannot log in, so its callbacks are
+# Reachable without signing in. Vobiz cannot sign in, so its callbacks are
 # instead protected by a per-call secret token checked in voice_approval_service.
-PUBLIC_PATHS = ("/api/health",)
-PUBLIC_PREFIXES = ("/api/webhooks/vobiz", "/api/voice/audio/")
+PUBLIC_PATHS = ("/api/health", "/login", "/register", "/logout", "/privacy", "/terms")
+PUBLIC_PREFIXES = ("/static/", "/api/webhooks/vobiz", "/api/voice/audio/")
 
 
 def setup_access_protection(app: Flask) -> None:
-    """Require a browser login (HTTP Basic) when APP_PASSWORD is set.
+    """Require a signed-in user (Flask session) when Config.AUTH_REQUIRED.
 
-    On a hosted deployment (Vercel sets VERCEL=1) a missing password fails
-    closed instead of leaving approvals open to anyone with the URL.
+    Pages redirect to /login; API calls get a JSON 401. Hosted deployments
+    always require sign-in; local development can opt in with AUTH_REQUIRED.
     """
+    from datetime import timedelta
+
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # blocks cross-site POSTs carrying the cookie
+    app.config["SESSION_COOKIE_SECURE"] = Config.IS_HOSTED
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=Config.SESSION_HOURS)
 
     @app.before_request
     def require_login():
         path = request.path
-        if path in PUBLIC_PATHS or path.startswith(PUBLIC_PREFIXES):
+        if not Config.AUTH_REQUIRED or path in PUBLIC_PATHS or path.startswith(PUBLIC_PREFIXES):
             return None
-        if not Config.APP_PASSWORD:
-            if Config.IS_HOSTED:
-                return jsonify({"error": {"code": "ACCESS_NOT_CONFIGURED",
-                                          "message": "Set APP_PASSWORD before using the hosted app"}}), 503
-            return None  # local development
+        if session.get("user"):
+            return None
+        if path.startswith("/api/"):
+            return jsonify({"error": {"code": "UNAUTHORIZED", "message": "Sign in required"}}), 401
+        return redirect(url_for("auth.login", next=request.full_path.rstrip("?")))
 
-        auth = request.authorization
-        valid = (
-            auth is not None
-            and hmac.compare_digest((auth.username or "").encode(), Config.APP_USERNAME.encode())
-            and hmac.compare_digest((auth.password or "").encode(), Config.APP_PASSWORD.encode())
-        )
-        if valid:
-            return None
-        return Response("Login required", 401, {"WWW-Authenticate": 'Basic realm="GhostWork"'})
+    @app.context_processor
+    def inject_user():
+        return {"current_user": session.get("user")}
 
 
 def setup_security_headers(app: Flask) -> None:
@@ -243,12 +247,13 @@ def create_app(config_override: Optional[Dict[str, Any]] = None) -> Flask:
 def register_blueprints(app: Flask) -> None:
     """Register all blueprints for API routes."""
     from routes.approvals import approvals_bp
+    from routes.auth import auth_bp
     from routes.discovery import discovery_bp
     from routes.executions import executions_bp
     from routes.ghostskills import ghostskills_bp
     from routes.pages import pages_bp
-    from routes.workflows import workflows_bp
     from routes.voice import voice_bp
+    from routes.workflows import workflows_bp
 
     app.register_blueprint(executions_bp)
     app.register_blueprint(workflows_bp)
@@ -257,6 +262,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(discovery_bp)
     app.register_blueprint(pages_bp)
     app.register_blueprint(voice_bp)
+    app.register_blueprint(auth_bp)
 
 
 def register_health_routes(app: Flask) -> None:

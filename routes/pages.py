@@ -7,14 +7,36 @@ pages_bp = Blueprint("pages", __name__)
 
 @pages_bp.route("/", methods=["GET"])
 def index():
-    """Discovery dashboard (landing page)."""
-    return render_template("discovery.html", page_name="discovery")
+    """Operations overview using live discovery and execution data."""
+    return render_template("dashboard.html", page_name="dashboard")
+
+
+@pages_bp.route("/workflows", methods=["GET"])
+def workflows_view():
+    """Discovered workflows and their Freshdesk tickets."""
+    return render_template("discovery.html", page_name="workflows")
+
+
+@pages_bp.route("/approvals", methods=["GET"])
+def approvals_view():
+    """Approval queue derived from execution state."""
+    return render_template("approvals.html", page_name="approvals")
 
 
 @pages_bp.route("/workflow/<int:workflow_id>", methods=["GET"])
 def workflow_detail(workflow_id: int):
-    """Workflow detail page with GhostGraph and GhostScore breakdown."""
-    return render_template("workflow_detail.html", workflow_id=workflow_id, page_name="discovery")
+    """Workflow detail page."""
+    return render_template("workflow_detail.html", workflow_id=workflow_id, page_name="workflows")
+
+
+@pages_bp.route("/privacy", methods=["GET"])
+def privacy_view():
+    return render_template("legal.html", page_name="", legal_title="Privacy Policy", legal_kind="privacy")
+
+
+@pages_bp.route("/terms", methods=["GET"])
+def terms_view():
+    return render_template("legal.html", page_name="", legal_title="Terms of Service", legal_kind="terms")
 
 
 @pages_bp.route("/execution", methods=["GET"])

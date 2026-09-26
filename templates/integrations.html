@@ -1,36 +1,3 @@
 {% extends "base.html" %}
-
-{% block title %}Integrations — GhostWork{% endblock %}
-
-{% block content %}
-<div class="integrations-page">
-    <section class="page-header">
-        <h1>Integrations</h1>
-        <p class="page-subtitle">External systems and their configuration status.</p>
-    </section>
-
-    <div id="loading" class="loading-state">
-        <p>Loading integration status...</p>
-    </div>
-
-    <div id="error" class="error-state hidden">
-        <p>Unable to load integration status. <button id="retry-btn">Try again</button></p>
-    </div>
-
-    <div id="content" class="hidden">
-        <div class="integrations-grid" id="integrations-grid">
-            <!-- Populated by JavaScript -->
-        </div>
-
-        <section class="privacy-info">
-            <h2>Privacy & Security</h2>
-            <p>
-                GhostWork processes activity metadata only. No credentials, keys, or sensitive data are exposed.
-                All external integrations use secure authentication and error handling.
-            </p>
-        </section>
-    </div>
-</div>
-
-<script src="{{ url_for('static', filename='js/integrations.js') }}"></script>
-{% endblock %}
+{% block title %}Integrations | GhostWork{% endblock %}
+{% block content %}<div class="integrations-page"><header class="page-header"><p class="eyebrow">Connected services</p><h1>Integrations</h1><p class="page-subtitle">Configuration status for the systems used by workflow discovery and execution.</p></header><div id="loading" class="integrations-grid" aria-label="Loading integrations"><div class="skeleton-panel"><div class="skeleton short"></div><div class="skeleton medium"></div></div><div class="skeleton-panel"><div class="skeleton short"></div><div class="skeleton medium"></div></div><div class="skeleton-panel"><div class="skeleton short"></div><div class="skeleton medium"></div></div></div><div id="error" class="error-state hidden" role="alert">Integration status could not be loaded. <button id="retry-btn" type="button">Try again</button></div><div id="content" class="hidden"><div class="integrations-grid" id="integrations-grid"></div><section class="privacy-info"><h2>About these statuses</h2><p>Configured means credentials or connection settings are present. Individual workflow runs report whether each read, write and verification succeeded.</p></section></div></div><script src="{{ url_for('static', filename='js/integrations.js') }}"></script>{% endblock %}

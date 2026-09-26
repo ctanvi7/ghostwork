@@ -1,103 +1,18 @@
 {% extends "base.html" %}
-
-{% block title %}Workflow Detail — GhostWork{% endblock %}
-
+{% block title %}Workflow | GhostWork{% endblock %}
 {% block content %}
 <div class="workflow-detail-page">
-    <div id="loading" class="loading-state">
-        <p>Loading workflow details...</p>
-    </div>
-
-    <div id="error" class="error-state hidden">
-        <p>Unable to load workflow. <a href="/">Back to Discovery</a></p>
-    </div>
-
+    <div id="loading" class="skeleton-panel" aria-label="Loading workflow"><div class="skeleton short"></div><div class="skeleton tall"></div><div class="skeleton medium"></div><div class="skeleton"></div></div>
+    <div id="error" class="error-state hidden" role="alert">This workflow could not be loaded. <a href="/workflows">Return to workflows</a></div>
     <div id="content" class="hidden">
-        <!-- Header -->
-        <section class="detail-header">
-            <a href="/" class="back-link">← Back to Discovery</a>
-
-            <div class="header-main">
-                <div class="header-title">
-                    <h1 id="workflow-name">—</h1>
-                    <p id="workflow-from" class="source-badge">Discovered from privacy-safe activity metadata</p>
-                </div>
-
-                <div class="header-ghostscore">
-                    <div class="ghostscore-display">
-                        <span class="score" id="workflow-score">—</span>
-                        <span class="grade" id="workflow-grade">—</span>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Metrics Grid -->
-        <section class="metrics-detail">
-            <div class="metric-item">
-                <span class="metric-label">Frequency</span>
-                <span class="metric-value" id="metric-frequency">—</span>
-            </div>
-            <div class="metric-item">
-                <span class="metric-label">Automation Potential</span>
-                <span class="metric-value" id="metric-automation">—</span>
-            </div>
-            <div class="metric-item">
-                <span class="metric-label">Average Duration</span>
-                <span class="metric-value" id="metric-duration">—</span>
-            </div>
-            <div class="metric-item">
-                <span class="metric-label">Risk Level</span>
-                <span class="metric-value" id="metric-risk">—</span>
-            </div>
-        </section>
-
-        <!-- Automation decision (Freshdesk-discovered patterns) -->
-        <section class="decision-section hidden" id="decision-section">
-            <h2 class="section-title">Automation Decision</h2>
-            <p id="decision-label"></p>
-            <p class="decision-reason" id="decision-reason"></p>
-        </section>
-
-        <!-- GhostGraph -->
-        <section class="ghostgraph-section">
-            <h2 class="section-title">GhostGraph</h2>
-            <p class="section-subtitle">Reconstructed from repeated cross-tool activity.</p>
-            <div class="ghostgraph-container" id="ghostgraph"></div>
-        </section>
-
-        <!-- GhostScore Breakdown -->
-        <section class="ghostscore-breakdown">
-            <h2 class="section-title">Why This GhostScore?</h2>
-            <p class="section-subtitle">
-                GhostScore ranks recurring workflows by automation value using deterministic, explainable signals.
-            </p>
-
-            <div class="breakdown-components" id="breakdown-components">
-                <!-- Populated by JavaScript -->
-            </div>
-        </section>
-
-        <!-- Autonomy Boundary (Refund Verification only) -->
-        <section class="autonomy-section hidden" id="autonomy-section">
-            <h2 class="section-title">Autonomy Boundary</h2>
-
-            <div class="autonomy-content">
-                <div class="boundary-display">
-                    <p class="boundary-limit">₹25,000 automatic approval limit</p>
-                    <div class="boundary-explanation">
-                        <p><strong>Below boundary:</strong> Can proceed autonomously</p>
-                        <p><strong>Above boundary:</strong> Requires human approval</p>
-                    </div>
-                </div>
-
-                <p class="governance-note">
-                    <strong>Design principle:</strong> LLM for interpretation. Code for enforcement.
-                </p>
-            </div>
-        </section>
+        <header class="detail-header"><a href="/workflows" class="back-link">Back to workflows</a><div class="header-main"><div class="header-title"><p class="eyebrow">Discovered process</p><h1 id="workflow-name">Workflow</h1><p id="workflow-from" class="page-subtitle">Observed from connected activity.</p></div><div class="header-ghostscore"><span class="metric-label">Opportunity score</span><div class="ghostscore-display"><span class="score" id="workflow-score">—</span><span class="grade" id="workflow-grade">—</span></div></div></div></header>
+        <section class="metrics-detail" aria-label="Workflow metrics"><div class="metric-item"><span class="metric-label">Observed</span><strong class="metric-value" id="metric-frequency">—</strong></div><div class="metric-item"><span class="metric-label">Automation potential</span><strong class="metric-value" id="metric-automation">—</strong></div><div class="metric-item"><span class="metric-label">Typical duration</span><strong class="metric-value" id="metric-duration">—</strong></div><div class="metric-item"><span class="metric-label">Risk</span><strong class="metric-value" id="metric-risk">—</strong></div></section>
+        <section class="section hidden" id="decision-section"><h2>Automation decision</h2><p id="decision-label"></p><p class="decision-reason" id="decision-reason"></p></section>
+        <section class="section hidden" id="run-section"><h2>Run automation</h2><p class="section-subtitle">Runs Refund Verification on the configured demo ticket. Refunds above ₹25,000 pause for human approval before Freshdesk is updated.</p><button id="run-demo-btn" class="btn btn-primary" type="button">Run on demo ticket</button></section>
+        <section class="section ghostgraph-section"><h2>Workflow</h2><p class="section-subtitle" id="workflow-path-description">How work moves from its source through review and completion.</p><div class="ghostgraph-container" id="ghostgraph"></div></section>
+        <section class="section ghostscore-breakdown"><h2>How the opportunity score is calculated</h2><p class="section-subtitle">The score uses observed frequency, repeatability, manual effort, automation potential and risk.</p><div class="breakdown-components" id="breakdown-components"></div></section>
+        <section class="section autonomy-section hidden" id="autonomy-section"><h2>Approval boundary</h2><div class="autonomy-content"><div class="boundary-display"><p class="boundary-limit">₹25,000 autonomy limit</p><div class="boundary-explanation"><p><strong>At or below the limit</strong>May continue automatically when all checks pass.</p><p><strong>Above the limit</strong>Requires human approval before an update.</p></div></div><p class="governance-note">AI assists with interpretation. The approval limit is enforced by code.</p></div></section>
     </div>
 </div>
-
 <script src="{{ url_for('static', filename='js/workflow-detail.js') }}"></script>
 {% endblock %}

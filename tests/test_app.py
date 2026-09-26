@@ -252,8 +252,8 @@ class TestAPIResponseShapes:
         data = json.loads(response.data)
         assert "workflows" in data
         assert isinstance(data["workflows"], list)
-        # Should have the seeded Refund Verification workflow
-        assert len(data["workflows"]) == 1
+        # Should have the seeded Refund Verification + Windows Troubleshooting workflows
+        assert len(data["workflows"]) == 2
         assert data["workflows"][0]["name"] == "Refund Verification"
 
     def test_workflow_detail_returns_workflow_property(self, client):

@@ -28,6 +28,9 @@ class Config:
     # External APIs
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
     CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
+    # Claude runs inside the HTTP request, so bound it (SDK default is 10 minutes).
+    CLAUDE_TIMEOUT_SECONDS = float(os.getenv("CLAUDE_TIMEOUT_SECONDS", "15"))
+    CLAUDE_MAX_RETRIES = int(os.getenv("CLAUDE_MAX_RETRIES", "1"))
     FRESHDESK_DOMAIN = os.getenv("FRESHDESK_DOMAIN")
     FRESHDESK_API_KEY = os.getenv("FRESHDESK_API_KEY")
     FRESHDESK_PROVIDER = os.getenv("FRESHDESK_PROVIDER", "mcp")  # "mcp" or "rest"
@@ -55,15 +58,22 @@ class Config:
     APPROVER_PHONE = os.getenv("APPROVER_PHONE")
     # Prepended to 10-digit local numbers from Freshdesk profiles (91 = India).
     VOBIZ_DEFAULT_COUNTRY_CODE = os.getenv("VOBIZ_DEFAULT_COUNTRY_CODE", "91")
+    # Call language when the assignee has no (supported) Freshdesk language.
+    VOICE_DEFAULT_LANGUAGE = os.getenv("VOICE_DEFAULT_LANGUAGE", "en-IN")
+    # Private Supabase Storage bucket for the call's Sarvam audio prompts.
+    VOICE_PROMPT_BUCKET = os.getenv("VOICE_PROMPT_BUCKET", "voice-prompts")
 
     # Governance
     AUTO_APPROVAL_LIMIT = Decimal("25000")  # ₹25,000
     REQUIRE_APPROVER_AUTH = os.getenv("REQUIRE_APPROVER_AUTH", "false").lower() == "true"
 
-    # Browser login for the whole app (see app.setup_access_protection).
-    APP_USERNAME = os.getenv("APP_USERNAME") or "ghostwork"
-    APP_PASSWORD = os.getenv("APP_PASSWORD")
-    IS_HOSTED = bool(os.getenv("VERCEL"))
+    # Vercel sets VERCEL; AWS Lambda sets AWS_LAMBDA_FUNCTION_NAME.
+    IS_HOSTED = bool(os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
+    # Sign-in is always required when hosted; optional locally (AUTH_REQUIRED=true).
+    AUTH_REQUIRED = IS_HOSTED or os.getenv("AUTH_REQUIRED", "false").lower() == "true"
+    # Invite code needed to register an account; unset = registration closed.
+    REGISTRATION_CODE = os.getenv("REGISTRATION_CODE")
+    SESSION_HOURS = int(os.getenv("SESSION_HOURS", "12"))
 
     # Public base URL for webhooks
     PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:5000")

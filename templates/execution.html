@@ -4,11 +4,8 @@
 
 {% block content %}
 <div class="execution-page">
-    <div id="execution-content" class="loading">
-        <p>Loading execution...</p>
-    </div>
+    <div id="execution-content" data-execution-id="{{ execution_id }}"><div class="skeleton-panel" aria-label="Loading execution"><div class="skeleton short"></div><div class="skeleton tall"></div><div class="skeleton medium"></div><div class="skeleton"></div></div></div>
 </div>
 
-<script data-execution-id="{{ execution_id }}"></script>
 <script src="{{ url_for('static', filename='js/execution-page.js') }}"></script>
 {% endblock %}

@@ -688,6 +688,7 @@ class SupabaseService:
                 {"workflow_id": workflow_id, "step_order": 5, "name": "approval_gate", "agent": "approval_gate", "classification": "HUMAN_REQUIRED", "created_at": now},
                 {"workflow_id": workflow_id, "step_order": 6, "name": "communication_agent", "agent": "communication_agent", "classification": "AUTOMATABLE", "created_at": now},
                 {"workflow_id": workflow_id, "step_order": 7, "name": "verification_agent", "agent": "verification_agent", "classification": "AUTOMATABLE", "created_at": now},
+                {"workflow_id": workflow_id, "step_order": 8, "name": "closure_agent", "agent": "closure_agent", "classification": "AUTOMATABLE", "created_at": now},
             ]
             self._supabase_client.table("workflow_steps").insert(steps).execute()
 

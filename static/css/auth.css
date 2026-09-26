@@ -1,0 +1,199 @@
+/* Sign-in and registration pages (uses design-system.css tokens) */
+
+.auth-page {
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.18), transparent 45%),
+        radial-gradient(circle at 85% 80%, rgba(129, 140, 248, 0.16), transparent 40%),
+        var(--color-surface-dark);
+}
+
+.auth-shell {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 440px);
+    align-items: center;
+    gap: var(--space-3xl);
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: var(--space-2xl) var(--space-xl);
+}
+
+.auth-brand {
+    color: var(--color-text);
+}
+
+.auth-logo {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-xl);
+}
+
+.auth-logo .logo-icon {
+    font-size: 2rem;
+}
+
+.auth-logo .logo-text {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-primary-dark);
+}
+
+.auth-tagline {
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-tight);
+    margin-bottom: var(--space-xl);
+}
+
+.auth-points {
+    list-style: none;
+    display: grid;
+    gap: var(--space-md);
+    margin-bottom: var(--space-xl);
+}
+
+.auth-points li {
+    position: relative;
+    padding-left: var(--space-xl);
+    color: var(--color-text-light);
+}
+
+.auth-points li::before {
+    content: "✓";
+    position: absolute;
+    left: 0;
+    color: var(--color-primary);
+    font-weight: var(--font-weight-bold);
+}
+
+.auth-privacy {
+    display: inline-block;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-light);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-xs) var(--space-md);
+}
+
+.auth-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+    padding: var(--space-2xl);
+}
+
+.auth-title {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-xs);
+}
+
+.auth-subtitle {
+    color: var(--color-text-light);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-lg);
+}
+
+.auth-form {
+    display: grid;
+    gap: var(--space-md);
+}
+
+.auth-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-md);
+}
+
+.auth-field {
+    display: grid;
+    gap: var(--space-xs);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+}
+
+.auth-field input {
+    font: inherit;
+    font-weight: var(--font-weight-normal);
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--color-border-dark);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.auth-field input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.auth-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-lighter);
+    margin-top: calc(-1 * var(--space-sm));
+}
+
+.auth-submit {
+    width: 100%;
+    justify-content: center;
+    margin-top: var(--space-sm);
+    padding: var(--space-md);
+}
+
+.auth-alert {
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    background: rgba(239, 68, 68, 0.08);
+    color: #b91c1c;
+    border-radius: var(--radius-md);
+    padding: var(--space-sm) var(--space-md);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-md);
+}
+
+.auth-alert-info {
+    border-color: rgba(59, 130, 246, 0.35);
+    background: rgba(59, 130, 246, 0.08);
+    color: #1d4ed8;
+}
+
+.auth-switch {
+    text-align: center;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-light);
+    margin-top: var(--space-lg);
+}
+
+.auth-switch a {
+    color: var(--color-primary);
+    font-weight: var(--font-weight-medium);
+    text-decoration: none;
+}
+
+.auth-switch a:hover {
+    text-decoration: underline;
+}
+
+@media (max-width: 860px) {
+    .auth-shell {
+        grid-template-columns: 1fr;
+        gap: var(--space-xl);
+    }
+
+    .auth-tagline {
+        font-size: var(--font-size-2xl);
+    }
+
+    .auth-points {
+        display: none;
+    }
+
+    .auth-row {
+        grid-template-columns: 1fr;
+    }
+}

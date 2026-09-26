@@ -1,83 +1,31 @@
-/**
- * Executions page - load and render execution list
- */
-
 async function loadExecutions() {
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
+    const content = document.getElementById('content');
+    loading.classList.remove('hidden'); error.classList.add('hidden'); content.classList.add('hidden');
     try {
-        const res = await fetch('/api/executions');
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
-        }
-
-        const data = await res.json();
-        const executions = Array.isArray(data.executions) ? data.executions : [];
-        renderExecutions(executions);
-
-        document.getElementById('loading').classList.add('hidden');
-        document.getElementById('content').classList.remove('hidden');
-
-    } catch (err) {
-        console.error('Executions load error:', err);
-        document.getElementById('loading').classList.add('hidden');
-        document.getElementById('error').classList.remove('hidden');
-    }
+        const data = await api.listExecutions(50);
+        renderExecutions(Array.isArray(data.executions) ? data.executions : []);
+        content.classList.remove('hidden');
+    } catch (cause) { error.classList.remove('hidden'); ui.showError('Executions unavailable', cause); }
+    finally { loading.classList.add('hidden'); }
 }
 
 function renderExecutions(executions) {
-    const listEl = document.getElementById('executions-list');
-
-    if (!executions || executions.length === 0) {
-        listEl.innerHTML = '<p class="empty-state">No executions yet. Run a workflow to see execution history here.</p>';
+    const list = document.getElementById('executions-list');
+    if (!executions.length) {
+        list.innerHTML = '<p class="empty-state">No executions yet. Open a workflow to start a run from an eligible ticket.</p>';
         return;
     }
-
-    listEl.innerHTML = executions.map(exec => {
-        const statusClass = `status-${exec.status.toLowerCase()}`;
-        const createdTime = new Date(exec.created_at).toLocaleString();
-
-        return `
-            <div class="execution-item">
-                <div class="exec-header">
-                    <span class="exec-id">Execution #${exec.id}</span>
-                    <span class="status-badge ${statusClass}">${exec.status}</span>
-                </div>
-                <div class="exec-details">
-                    <div>
-                        <span class="label">Workflow:</span>
-                        <span>${escapeHtml(exec.workflow_name || 'Unknown')}</span>
-                    </div>
-                    <div>
-                        <span class="label">Current Step:</span>
-                        <span>${escapeHtml(exec.current_step || '—')}</span>
-                    </div>
-                    <div>
-                        <span class="label">Created:</span>
-                        <span>${createdTime}</span>
-                    </div>
-                </div>
-                <div class="exec-actions">
-                    <a href="/execution?id=${exec.id}" class="btn btn-secondary">Details</a>
-                </div>
-            </div>
-        `;
+    list.innerHTML = executions.map(item => {
+        const id = Number(item.id);
+        const status = String(item.status || 'PENDING');
+        const created = item.created_at ? new Date(item.created_at).toLocaleString() : 'Unknown';
+        return `<article class="execution-item"><div><div class="exec-header"><strong class="exec-id">Execution #${id}</strong><span class="status-badge status-${escapeHtml(status.toLowerCase())}">${escapeHtml(ui.statusLabel(status))}</span></div><div class="exec-details"><div><span class="label">Workflow</span><span>${escapeHtml(item.workflow_name || 'Workflow')}</span></div><div><span class="label">Freshdesk ticket</span><span>#${escapeHtml(item.ticket_id ?? '—')}</span></div><div><span class="label">Created</span><span>${escapeHtml(created)}</span></div></div></div><div class="exec-actions"><a href="/execution/${id}" class="btn btn-secondary">View execution</a></div></article>`;
     }).join('');
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('retry-btn').addEventListener('click', loadExecutions);
     loadExecutions();
-
-    // Add retry button listener if it exists
-    const retryBtn = document.getElementById('retry-btn');
-    if (retryBtn) {
-        retryBtn.addEventListener('click', function() {
-            document.getElementById('error').classList.add('hidden');
-            loadExecutions();
-        });
-    }
 });

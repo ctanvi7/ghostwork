@@ -1,94 +1,50 @@
-/**
- * Common UI utilities for GhostWork frontend
- */
-
+/** Shared, accessible product messages and plain-language labels. */
 const ui = (() => {
-    function showError(title, error) {
-        const message = error?.message || String(error);
+    const STATUS_LABELS = {PENDING: 'Pending', RUNNING: 'In progress', WAITING_FOR_APPROVAL: 'Human approval required',
+        APPROVED: 'Approved', COMPLETED: 'Completed', REJECTED: 'Rejected', FAILED: 'Failed'};
+    const STAGE_LABELS = {context_agent: 'Context', billing_agent: 'Billing', policy_agent: 'Policy',
+        risk_agent: 'Risk assessment', approval_gate: 'Human approval', communication_agent: 'Freshdesk update',
+        verification_agent: 'Verification', closure_agent: 'Ticket closure'};
 
-        // Create alert element
-        const alert = document.createElement('div');
-        alert.className = 'alert alert-error';
-        const closeBtn = document.createElement('button');
-        closeBtn.className = 'alert-close';
-        closeBtn.textContent = '×';
-        closeBtn.addEventListener('click', () => alert.remove());
-
+    function showMessage(kind, title, detail = '', persistent = false) {
+        const region = document.getElementById('message-region') || document.body;
+        const message = document.createElement('div');
+        message.className = 'system-message';
+        message.dataset.kind = kind;
+        message.setAttribute('role', kind === 'error' ? 'alert' : 'status');
         const content = document.createElement('div');
-        content.className = 'alert-content';
-        content.innerHTML = `
-            <strong>${escapeHtml(title)}</strong>
-            <p>${escapeHtml(message)}</p>
-        `;
-
-        alert.appendChild(content);
-        alert.appendChild(closeBtn);
-
-        // Insert at top of main content
-        const main = document.querySelector('.app-main');
-        if (main) {
-            main.insertBefore(alert, main.firstChild);
-        } else {
-            document.body.insertBefore(alert, document.body.firstChild);
+        const heading = document.createElement('strong');
+        heading.textContent = title;
+        content.appendChild(heading);
+        if (detail) {
+            const paragraph = document.createElement('p');
+            paragraph.textContent = detail;
+            content.appendChild(paragraph);
         }
-
-        // Auto-dismiss after 10 seconds
-        setTimeout(() => {
-            if (alert.parentElement) {
-                alert.remove();
-            }
-        }, 10000);
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'message-close';
+        close.setAttribute('aria-label', 'Dismiss message');
+        close.textContent = '×';
+        close.addEventListener('click', () => message.remove());
+        message.append(content, close);
+        region.prepend(message);
+        if (!persistent) setTimeout(() => message.remove(), kind === 'error' ? 12000 : 6500);
+        return message;
     }
-
-    function showSuccess(message) {
-        // Create alert element
-        const alert = document.createElement('div');
-        alert.className = 'alert alert-success';
-        const closeBtn = document.createElement('button');
-        closeBtn.className = 'alert-close';
-        closeBtn.textContent = '×';
-        closeBtn.addEventListener('click', () => alert.remove());
-
-        const content = document.createElement('div');
-        content.className = 'alert-content';
-        content.innerHTML = `<p>${escapeHtml(message)}</p>`;
-
-        alert.appendChild(content);
-        alert.appendChild(closeBtn);
-
-        // Insert at top of main content
-        const main = document.querySelector('.app-main');
-        if (main) {
-            main.insertBefore(alert, main.firstChild);
-        } else {
-            document.body.insertBefore(alert, document.body.firstChild);
-        }
-
-        // Auto-dismiss after 5 seconds
-        setTimeout(() => {
-            if (alert.parentElement) {
-                alert.remove();
-            }
-        }, 5000);
-    }
-
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
     return {
-        showError,
-        showSuccess
+        statusLabel(status) { return STATUS_LABELS[status] || String(status || 'Pending'); },
+        stageLabel(step) { return STAGE_LABELS[step] || String(step || 'Step').replaceAll('_', ' '); },
+        showMessage,
+        showError(title, error) { return showMessage('error', title, error?.message || String(error)); },
+        showSuccess(message) { return showMessage('success', message); },
+        showInfo(title, detail) { return showMessage('info', title, detail); }
     };
 })();
 
-/**
- * Helper to escape HTML in templates
- */
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+function escapeHtml(value) {
+    const element = document.createElement('div');
+    element.textContent = value == null ? '' : String(value);
+    return element.innerHTML;
 }
+

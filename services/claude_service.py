@@ -14,6 +14,15 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def make_client():
+    """Anthropic client with a bounded timeout, so a slow API cannot hang a request."""
+    return Anthropic(
+        api_key=Config.ANTHROPIC_API_KEY,
+        timeout=Config.CLAUDE_TIMEOUT_SECONDS,
+        max_retries=Config.CLAUDE_MAX_RETRIES,
+    )
+
+
 def extract_ticket_context(ticket_text: str) -> TicketContext:
     """
     Extract structured context from a support ticket using Claude.
@@ -33,7 +42,7 @@ def extract_ticket_context(ticket_text: str) -> TicketContext:
         if Anthropic is None:
             raise ImportError("Anthropic SDK not installed")
 
-        client = Anthropic(api_key=Config.ANTHROPIC_API_KEY)
+        client = make_client()
 
         # System prompt for structured extraction
         system_prompt = """You are an expert support ticket analyst. Extract structured information from support tickets.
@@ -53,14 +62,19 @@ Return valid JSON only, no markdown or extra text. The JSON must match this sche
 {ticket_text}"""
 
         # Call Claude with structured output
+        # Room for adaptive thinking (on by default for current models) plus the JSON.
         response = client.messages.create(
             model=Config.CLAUDE_MODEL,
-            max_tokens=500,
+            max_tokens=4000,
             system=system_prompt,
             messages=[
                 {"role": "user", "content": user_prompt}
             ]
         )
+
+        # A refused or truncated answer is not usable JSON: fall back.
+        if getattr(response, "stop_reason", None) in ("refusal", "max_tokens"):
+            raise ValueError(f"Claude stopped early ({response.stop_reason})")
 
         # Parse the response (skip thinking blocks, extract text)
         response_text = None

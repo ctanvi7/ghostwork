@@ -27,7 +27,7 @@ Before making non-trivial changes, read:
 - Freshdesk REST v2
 - Anthropic Claude API
 - Vobiz telephony
-- Sarvam STT/TTS
+- Sarvam TTS
 - pytest
 
 ## Hard Constraints
@@ -61,7 +61,7 @@ When building from scratch or repairing the app, prioritize:
 9. Verification Agent
 10. Workflow discovery / GhostScore / GhostGraph
 11. Vobiz call
-12. Sarvam STT/TTS
+12. Sarvam TTS
 13. Polish
 
 ## External API Behavior

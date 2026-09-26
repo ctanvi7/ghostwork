@@ -81,19 +81,13 @@ def _dispatch(operation: str, mcp_call, rest_call, allow_rest_fallback: Optional
     return rest_call()
 
 
-def _mcp_verify_note(
-    ticket_id: int, expected_note_id: Optional[int] = None,
-    execution_reference: Optional[str] = None
-) -> dict:
-    """Independently read back ticket conversations via MCP and look for the note."""
-    from services import freshdesk_mcp_adapter
-
-    conversations = freshdesk_mcp_adapter.fetch_ticket_conversations(ticket_id)
-
+def _match_note(conversations: list, ticket_id: int, expected_note_id: Optional[int] = None,
+                execution_reference: Optional[str] = None) -> dict:
+    """Look for the expected note in ticket conversations: by note ID, else by a marker in its body."""
     if expected_note_id:
         for conv in conversations:
             if str(conv.get("id")) == str(expected_note_id):
-                logger.info(f"Verified note {expected_note_id} on ticket {ticket_id} via MCP")
+                logger.info(f"Verified note {expected_note_id} on ticket {ticket_id}")
                 return {
                     "verified": True,
                     "matched_note_id": expected_note_id,
@@ -103,11 +97,12 @@ def _mcp_verify_note(
                 }
 
     if execution_reference:
+        reference = execution_reference.lower()
         for conv in conversations:
             body = f"{conv.get('body') or ''} {conv.get('body_text') or ''}".lower()
-            if execution_reference.lower() in body:
+            if reference in body:
                 matched_note_id = conv.get("id")
-                logger.info(f"Verified execution reference on ticket {ticket_id} via MCP")
+                logger.info(f"Verified execution reference on ticket {ticket_id}, note {matched_note_id}")
                 return {
                     "verified": True,
                     "matched_note_id": matched_note_id,
@@ -116,6 +111,7 @@ def _mcp_verify_note(
                     "status": "verified"
                 }
 
+    logger.warning(f"Verification failed: no matching note on ticket {ticket_id}")
     return {
         "verified": False,
         "matched_note_id": None,
@@ -124,6 +120,17 @@ def _mcp_verify_note(
         "reason": f"Note not found (expected: {expected_note_id}, ref: {execution_reference})",
         "status": "verification_failed"
     }
+
+
+def _mcp_verify_note(
+    ticket_id: int, expected_note_id: Optional[int] = None,
+    execution_reference: Optional[str] = None
+) -> dict:
+    """Independently read back ticket conversations via MCP and look for the note."""
+    from services import freshdesk_mcp_adapter
+
+    conversations = freshdesk_mcp_adapter.fetch_ticket_conversations(ticket_id)
+    return _match_note(conversations, ticket_id, expected_note_id, execution_reference)
 
 
 def get_ticket(ticket_id: int, allow_rest_fallback: Optional[bool] = None) -> Optional[FreshDeskTicket]:
@@ -327,6 +334,26 @@ def _normalize_ticket(raw_response: dict) -> FreshDeskTicket:
     )
 
 
+def cached_demo_ticket(ticket_id: int) -> Optional[FreshDeskTicket]:
+    """The canonical demo ticket, used only when Freshdesk cannot be read.
+
+    Enabled by FRESHDESK_FALLBACK=cache, and only for FRESHDESK_DEMO_TICKET_ID,
+    so no other ticket can ever pick up the demo refund amount. Callers must
+    label it as cached: it is not a live Freshdesk read.
+    """
+    if Config.FRESHDESK_FALLBACK != "cache" or ticket_id != Config.FRESHDESK_DEMO_TICKET_ID:
+        return None
+    return FreshDeskTicket(
+        ticket_id=ticket_id,
+        subject="Duplicate charge refund for INV-88421",
+        description_text="I was charged twice for invoice INV-88421. Please refund the duplicate charge.",
+        requester_name="Aditi Rao",
+        priority=2,
+        custom_fields={Config.FRESHDESK_REFUND_AMOUNT_FIELD: 32000, "cf_invoice_id": "INV-88421"},
+        raw_response={"id": ticket_id, "status": 2},
+    )
+
+
 def extract_refund_amount(ticket: FreshDeskTicket) -> Optional[float]:
     """
     Extract refund amount from Freshdesk ticket.
@@ -445,6 +472,7 @@ def get_agent_contact(agent_id: int, allow_rest_fallback: Optional[bool] = None)
         "name": contact.get("name"),
         "mobile": contact.get("mobile"),
         "phone": contact.get("phone"),
+        "language": contact.get("language"),
         "active": contact.get("active", True),
     }
 
@@ -622,11 +650,19 @@ def verify_note_exists(ticket_id: int, expected_note_id: Optional[int] = None,
     )
 
 
+# Freshdesk REST returns at most 100 conversations per page.
+REST_CONVERSATIONS_PER_PAGE = 100
+
+
 def _verify_note_exists_rest(ticket_id: int, expected_note_id: Optional[int] = None,
-                              execution_reference: Optional[str] = None) -> dict:
-    """Verify note exists using REST API."""
-    # Fetch ticket with conversations
-    url = f"https://{Config.freshdesk_rest_host()}/api/v2/tickets/{ticket_id}?include=conversations"
+                              execution_reference: Optional[str] = None, max_pages: int = 10) -> dict:
+    """Verify note exists using REST API.
+
+    Uses GET /tickets/{id}/conversations with paging: "?include=conversations"
+    returns only the first 10, so a new note on a busy ticket would be missed.
+    """
+    url = f"https://{Config.freshdesk_rest_host()}/api/v2/tickets/{ticket_id}/conversations"
+    conversations = []
 
     try:
         logger.info(f"Verifying note on ticket {ticket_id}", extra={
@@ -634,83 +670,45 @@ def _verify_note_exists_rest(ticket_id: int, expected_note_id: Optional[int] = N
             "expected_note_id": expected_note_id
         })
 
-        response = requests.get(
-            url,
-            auth=HTTPBasicAuth(Config.FRESHDESK_API_KEY, "X"),
-            headers={"Content-Type": "application/json"},
-            timeout=(CONNECT_TIMEOUT, READ_TIMEOUT)
-        )
+        for page in range(1, max_pages + 1):
+            response = requests.get(
+                url,
+                auth=HTTPBasicAuth(Config.FRESHDESK_API_KEY, "X"),
+                headers={"Content-Type": "application/json"},
+                params={"per_page": REST_CONVERSATIONS_PER_PAGE, "page": page},
+                timeout=(CONNECT_TIMEOUT, READ_TIMEOUT)
+            )
 
-        # Check for authentication/authorization errors
-        if response.status_code == 401:
-            logger.error("Freshdesk authentication failed (401) on verification")
-            raise FreshDeskError("Authentication failed: invalid API key or domain")
+            # Check for authentication/authorization errors
+            if response.status_code == 401:
+                logger.error("Freshdesk authentication failed (401) on verification")
+                raise FreshDeskError("Authentication failed: invalid API key or domain")
 
-        if response.status_code == 403:
-            logger.error("Freshdesk authorization failed (403) on verification")
-            raise FreshDeskError("Authorization failed: insufficient permissions")
+            if response.status_code == 403:
+                logger.error("Freshdesk authorization failed (403) on verification")
+                raise FreshDeskError("Authorization failed: insufficient permissions")
 
-        # Check for not found
-        if response.status_code == 404:
-            logger.warning(f"Ticket {ticket_id} not found on Freshdesk (404)")
-            raise FreshDeskError(f"Ticket {ticket_id} not found")
+            # Check for not found
+            if response.status_code == 404:
+                logger.warning(f"Ticket {ticket_id} not found on Freshdesk (404)")
+                raise FreshDeskError(f"Ticket {ticket_id} not found")
 
-        # Check for server errors
-        if response.status_code >= 500:
-            logger.error(f"Freshdesk server error ({response.status_code}) on verification")
-            raise FreshDeskError(f"Freshdesk server error: {response.status_code}")
+            # Check for server errors
+            if response.status_code >= 500:
+                logger.error(f"Freshdesk server error ({response.status_code}) on verification")
+                raise FreshDeskError(f"Freshdesk server error: {response.status_code}")
 
-        # Check for other errors
-        if not response.ok:
-            logger.error(f"Freshdesk API error ({response.status_code}) on verification: {response.text[:200]}")
-            raise FreshDeskError(f"API error: {response.status_code}")
+            # Check for other errors
+            if not response.ok:
+                logger.error(f"Freshdesk API error ({response.status_code}) on verification: {response.text[:200]}")
+                raise FreshDeskError(f"API error: {response.status_code}")
 
-        # Parse response
-        data = response.json()
-        conversations = data.get("conversations", [])
-
-        # Check if expected note exists
-        matched_note_id = None
-
-        # First, try to match by note_id if provided
-        if expected_note_id:
-            for conv in conversations:
-                if conv.get("id") == expected_note_id:
-                    matched_note_id = expected_note_id
-                    logger.info(f"Verified note {expected_note_id} on ticket {ticket_id}")
-                    return {
-                        "verified": True,
-                        "matched_note_id": matched_note_id,
-                        "ticket_id": ticket_id,
-                        "reason": f"Note {expected_note_id} found",
-                        "status": "verified"
-                    }
-
-        # Second, try to match by execution reference in body
-        if execution_reference:
-            for conv in conversations:
-                body = (conv.get("body") or "").lower()
-                if execution_reference.lower() in body:
-                    matched_note_id = conv.get("id")
-                    logger.info(f"Verified execution reference on ticket {ticket_id}, note {matched_note_id}")
-                    return {
-                        "verified": True,
-                        "matched_note_id": matched_note_id,
-                        "ticket_id": ticket_id,
-                        "reason": f"Execution reference found in note {matched_note_id}",
-                        "status": "verified"
-                    }
-
-        # No match found
-        logger.warning(f"Verification failed: no matching note on ticket {ticket_id}")
-        return {
-            "verified": False,
-            "matched_note_id": None,
-            "ticket_id": ticket_id,
-            "expected_note_id": expected_note_id,
-            "reason": f"Note not found (expected: {expected_note_id}, ref: {execution_reference})",
-            "status": "verification_failed"
-        }
+            data = response.json()
+            if not isinstance(data, list):
+                raise FreshDeskError("Freshdesk returned conversations in an unrecognized format")
+            conversations.extend(data)
+            if len(data) < REST_CONVERSATIONS_PER_PAGE:
+                break
 
     except requests.Timeout as e:
         logger.error(f"Freshdesk API timeout during verification for ticket {ticket_id}")
@@ -721,3 +719,5 @@ def _verify_note_exists_rest(ticket_id: int, expected_note_id: Optional[int] = N
     except requests.RequestException as e:
         logger.error(f"Freshdesk verification request failed: {str(e)[:100]}")
         raise FreshDeskError(f"Request failed: {str(e)[:100]}") from e
+
+    return _match_note(conversations, ticket_id, expected_note_id, execution_reference)

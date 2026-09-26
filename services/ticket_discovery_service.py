@@ -39,7 +39,19 @@ GENERAL_CATEGORY = ("general", "General Inquiry")
 
 # Categories GhostWork is allowed to automate, mapped to the orchestrator
 # workflow that runs them. Anything not listed here goes to a human.
-PLAYBOOKS = {"refund": "Refund Verification"}
+PLAYBOOKS = {"refund": "Refund Verification", "it_troubleshooting": "Windows Troubleshooting"}
+
+# Extra context appended to the AUTOMATE reason, specific to what each
+# playbook's own deterministic control actually is. Refunds gate on the
+# approval threshold; IT troubleshooting has no financial risk, so it never
+# needs human approval and is not held to the same gate.
+PLAYBOOK_NOTES = {
+    "refund": (f"Refunds above ₹{Config.AUTO_APPROVAL_LIMIT:,} or with no amount still "
+              "pause for human approval."),
+    "it_troubleshooting": "Advice only, no irreversible action, so no human approval is required.",
+}
+# refund carries financial/approval risk; it_troubleshooting is advice only.
+PLAYBOOK_RISK = {"refund": "medium", "it_troubleshooting": "low"}
 
 # How humans handle each pattern today (drawn as the GhostGraph).
 REFUND_SIGNATURE = [
@@ -50,23 +62,30 @@ REFUND_SIGNATURE = [
     "approval_system:approval_requested",
     "freshdesk:ticket_updated",
 ]
+IT_TROUBLESHOOTING_SIGNATURE = [
+    "freshdesk:ticket_opened",
+    "ghostwork:diagnose_issue",
+    "freshdesk:ticket_updated",
+]
 HUMAN_SIGNATURE = [
     "freshdesk:ticket_opened",
     "ghostwork:pattern_triage",
     "ghostwork:route_to_human",
     "human:resolve_and_reply",
 ]
+# The automated path's own signature per playbook, used only when a pattern is AUTOMATE.
+PLAYBOOK_SIGNATURES = {"refund": REFUND_SIGNATURE, "it_troubleshooting": IT_TROUBLESHOOTING_SIGNATURE}
 MANUAL_TOOLS = {"human", "approval_system"}
 
 # Freshdesk has no handling-time metadata, so these are labeled demo estimates.
-ESTIMATED_HANDLING_SECONDS = {"refund": 667}
+ESTIMATED_HANDLING_SECONDS = {"refund": 667, "it_troubleshooting": 480}
 DEFAULT_HANDLING_SECONDS = 600
 
 STATUS_NAMES = {2: "Open", 3: "Pending", 4: "Resolved", 5: "Closed"}
 ACTIONABLE_STATUSES = {2, 3}
 METADATA_FIELDS = ("id", "subject", "type", "tags", "status", "priority", "created_at", "spam")
 
-CACHE_SECONDS = 60
+CACHE_SECONDS = 20
 _cache: Dict[str, Any] = {"at": 0.0, "tickets": None}
 
 
@@ -116,14 +135,12 @@ def assess_automation(category_key: str, category_name: str, frequency: int) -> 
     """Deterministic decision: automate only if an approved playbook exists."""
     workflow_name = PLAYBOOKS.get(category_key)
     if workflow_name:
+        note = PLAYBOOK_NOTES.get(category_key, "")
         return {
             "decision": "AUTOMATE",
             "automatable": True,
             "workflow_name": workflow_name,
-            "reason": (
-                f"Matches the approved '{workflow_name}' playbook. Refunds above "
-                f"₹{Config.AUTO_APPROVAL_LIMIT:,} or with no amount still pause for human approval."
-            ),
+            "reason": f"Matches the approved '{workflow_name}' playbook. {note}".strip(),
         }
     reason = f"No approved automation playbook for '{category_name}', so tickets are routed to a human agent."
     if frequency >= 2:
@@ -167,7 +184,7 @@ def discover_ticket_patterns(tickets: List[Dict[str, Any]], min_frequency: int =
             continue
 
         automation = assess_automation(key, group["name"], frequency)
-        signature = REFUND_SIGNATURE if automation["automatable"] else HUMAN_SIGNATURE
+        signature = PLAYBOOK_SIGNATURES.get(key, HUMAN_SIGNATURE) if automation["automatable"] else HUMAN_SIGNATURE
         automated_steps = [s for s in signature if s.split(":")[0] not in MANUAL_TOOLS]
         automation_percentage = len(automated_steps) / len(signature) * 100
         duration = ESTIMATED_HANDLING_SECONDS.get(key, DEFAULT_HANDLING_SECONDS)
@@ -197,7 +214,7 @@ def discover_ticket_patterns(tickets: List[Dict[str, Any]], min_frequency: int =
             "automation": automation,
             "ghost_score": score["score"],
             "ghost_score_breakdown": score["breakdown"],
-            "risk_level": "medium" if automation["automatable"] else "low",
+            "risk_level": PLAYBOOK_RISK.get(key, "medium") if automation["automatable"] else "low",
             "discovered_from": "freshdesk_tickets",
             "privacy_mode": "metadata_only",
             "data_sources": ["subject", "type", "tags", "status"],

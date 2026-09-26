@@ -117,9 +117,15 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
                 }
             }
 
-        # Construct the note content
+        # Construct the note content. Say "approved by human" only when a human
+        # approval record exists; low-value refunds complete without one.
         refund_amount = execution.get("refund_amount")
-        note_body = _build_note_content(refund_amount, execution.get("execution_id") or execution_id)
+        human_approved = False
+        if execution_id:
+            from services.supabase_service import get_service
+            human_approved = get_service().get_approved_approval(execution_id) is not None
+        note_body = _build_note_content(refund_amount, execution.get("execution_id") or execution_id,
+                                        human_approved=human_approved)
 
         # Attempt to add note to Freshdesk ticket
         try:
@@ -197,14 +203,21 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
         }
 
 
-def _build_note_content(refund_amount: Optional[float] = None, execution_id: Optional[str] = None) -> str:
+def _build_note_content(refund_amount: Optional[float] = None, execution_id: Optional[str] = None,
+                        human_approved: bool = True) -> str:
     """Build concise note content for Freshdesk ticket."""
-    lines = [
-        "GhostWork refund workflow approved by human reviewer.",
-    ]
+    if human_approved:
+        lines = ["GhostWork refund workflow approved by human reviewer."]
+    else:
+        lines = ["GhostWork refund workflow completed within the autonomous approval limit; "
+                 "human approval was not required."]
 
-    if refund_amount:
-        lines.append(f"Refund amount: ₹{refund_amount:,.2f}.")
+    try:
+        amount = Decimal(str(refund_amount)) if refund_amount is not None else None
+    except InvalidOperation:
+        amount = None
+    if amount is not None and amount.is_finite() and amount > 0:
+        lines.append(f"Refund amount: ₹{amount:,.2f}.")
 
     lines.append("Automated checks completed successfully.")
 

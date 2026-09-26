@@ -4,9 +4,14 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
-from config import Config
 from app import InvalidStateError, NotFoundError, ValidationError
-from orchestrator.workflow import run_execution
+from config import Config
+from routes.executions import (
+    attach_workflow_names,
+    parse_positive_int,
+    parse_refund_amount,
+    start_execution,
+)
 from services.discovery_service import get_discovered_workflows
 from services.ghostskill_service import generate_ghostskill
 from services.supabase_service import get_service
@@ -135,13 +140,13 @@ def execute_skill(skill_id: int):
       ...
     }
     """
-    data = request.get_json()
+    data = request.get_json(silent=True)
 
-    if not data:
+    if not data or not isinstance(data, dict):
         raise ValidationError("Request body required")
 
-    ticket_id = data.get("ticket_id") or Config.FRESHDESK_DEMO_TICKET_ID
-    refund_amount = data.get("refund_amount")
+    ticket_id = parse_positive_int(data.get("ticket_id") or Config.FRESHDESK_DEMO_TICKET_ID, "ticket_id")
+    refund_amount = parse_refund_amount(data.get("refund_amount"))
 
     if refund_amount is None:
         raise ValidationError("refund_amount is required")
@@ -163,17 +168,15 @@ def execute_skill(skill_id: int):
 
     # Get orchestrator workflow_id from the skill row
     workflow_id = skill.get("workflow_id")
-    if not workflow_id:
+    workflow = service.get_workflow(workflow_id) if workflow_id else None
+    if not workflow:
         raise ValidationError("Skill has no associated workflow")
 
-    # Create execution
-    exec_id = service.create_execution(workflow_id, ticket_id, refund_amount)
+    # Same guards as POST /api/executions: one active run per ticket, and the
+    # ticket must be an open ticket of this playbook.
+    execution, created = start_execution(workflow, ticket_id, refund_amount)
+    attach_workflow_names([execution])
 
-    # Run execution (synchronous for testing, would be async in production)
-    run_execution(exec_id)
+    logger.info(f"Executed GhostSkill {skill_id} as execution {execution.get('id')}")
 
-    execution = service.get_execution(exec_id)
-
-    logger.info(f"Executed GhostSkill {skill_id} as execution {exec_id}")
-
-    return jsonify(execution), 202
+    return jsonify(execution), (202 if created else 200)

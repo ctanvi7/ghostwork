@@ -1,0 +1,49 @@
+{% extends "auth_base.html" %}
+
+{% block title %}Create account{% endblock %}
+
+{% block card %}
+<h2 class="auth-title">Create your account</h2>
+<p class="auth-subtitle">You need an invite code from your GhostWork administrator.</p>
+
+{% if error %}
+<div class="auth-alert" role="alert">{{ error }}</div>
+{% endif %}
+
+{% if registration_open %}
+<form method="post" action="{{ url_for('auth.register_page') }}" class="auth-form">
+    <label class="auth-field">
+        <span>Full name</span>
+        <input type="text" name="name" value="{{ form.name }}" autocomplete="name" maxlength="80" required autofocus>
+    </label>
+
+    <label class="auth-field">
+        <span>Work email</span>
+        <input type="email" name="email" value="{{ form.email }}" autocomplete="username" required>
+    </label>
+
+    <div class="auth-row">
+        <label class="auth-field">
+            <span>Password</span>
+            <input type="password" name="password" autocomplete="new-password" minlength="8" required>
+        </label>
+        <label class="auth-field">
+            <span>Confirm password</span>
+            <input type="password" name="confirm_password" autocomplete="new-password" minlength="8" required>
+        </label>
+    </div>
+    <p class="auth-hint">At least 8 characters.</p>
+
+    <label class="auth-field">
+        <span>Invite code</span>
+        <input type="text" name="invite_code" autocomplete="off" required>
+    </label>
+
+    <button type="submit" class="btn btn-primary auth-submit">Create account</button>
+</form>
+{% else %}
+<div class="auth-alert auth-alert-info">Registration is closed. Ask an administrator for an account.</div>
+{% endif %}
+
+<p class="auth-switch">Already have an account? <a href="{{ url_for('auth.login') }}">Sign in</a></p>
+{% endblock %}

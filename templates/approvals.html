@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Approvals | GhostWork{% endblock %}
+{% block content %}
+<div class="approvals-page">
+    <header class="page-header"><p class="eyebrow">Human decisions</p><h1>Approvals</h1><p class="page-subtitle">Review executions paused by the autonomy boundary. No downstream action runs until approval.</p></header>
+    <div id="approvals-loading" class="skeleton-panel" aria-label="Loading approvals"><div class="skeleton short"></div><div class="skeleton medium"></div><div class="skeleton"></div></div>
+    <div id="approvals-error" class="error-state hidden" role="alert">Approvals could not be loaded. <button id="approvals-retry" type="button">Try again</button></div>
+    <div id="approvals-content" class="hidden"><div class="section-head"><h2>Awaiting decision</h2><span class="status-badge" id="approval-count">0 pending</span></div><div id="approvals-list" class="executions-list"></div></div>
+</div>
+<script src="{{ url_for('static', filename='js/approvals-page.js') }}"></script>
+{% endblock %}

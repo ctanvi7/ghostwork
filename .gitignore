@@ -54,3 +54,6 @@ htmlcov/
 # OS
 *.log
 .env.example~
+
+# Deploy build output
+.build/

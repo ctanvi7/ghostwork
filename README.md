@@ -22,8 +22,8 @@ A Freshdesk ticket requests a ₹32,000 refund for a duplicate charge. GhostWork
 5. enforces a ₹25,000 deterministic approval limit
 6. pauses execution
 7. requests human approval via web or Vobiz voice call
-8. uses Sarvam for speech-to-text/text-to-speech
-9. resumes after confirmation
+8. uses Sarvam text-to-speech for the approval call
+9. resumes after approval
 10. updates Freshdesk
 11. verifies the final outcome
 
@@ -41,7 +41,7 @@ A Freshdesk ticket requests a ₹32,000 refund for a duplicate charge. GhostWork
 - Freshdesk REST API v2
 - Anthropic Claude API
 - Vobiz
-- Sarvam AI STT/TTS
+- Sarvam AI TTS
 - pytest
 
 ## Architecture
@@ -116,7 +116,7 @@ Freshdesk ticket
 
 ## Reliability Strategy
 - Voice fails → web approval
-- Sarvam fails → DTMF fallback
+- Sarvam fails → Vobiz built-in voice reads the prompt
 - Vobiz fails → web approval
 - Claude fails → deterministic/cached demo response
 - Freshdesk temporarily fails → cached demo ticket
@@ -144,14 +144,13 @@ Voice calling is optional. Set `VOBIZ_AUTH_ID`, `VOBIZ_AUTH_TOKEN`,
 `.env`. The approver called is the Freshdesk ticket's assigned agent (mobile,
 then phone, from the agent profile); `APPROVER_PHONE` is only a fallback. The old `VOBIZ_API_KEY` name is accepted as an
 auth-token fallback, but an auth ID is still required. Set `SARVAM_API_KEY`
-to use Sarvam prompts and speech recognition. Localhost is not a public
+to use Sarvam-voiced prompts. Localhost is not a public
 callback URL; use an HTTPS tunnel for a local live-call test.
 
 On a refund above the limit, click **Call Approver**. Vobiz reads the request
 using Sarvam TTS when available, or its built-in speech fallback. Press 1
-to request approval, then press 1 again to confirm. Press 2 to reject.
-Spoken approval is transcribed by Sarvam and still requires a second DTMF
-confirmation. Ambiguous speech, failed transcription, and failed calls leave
+to approve or 2 to reject; only key presses are accepted. Any other key
+repeats the prompt. No key press, a missed call, and failed calls leave
 the execution waiting so web approval can be used.
 
 The execution page shows estimated impact after completion. Those values are

@@ -51,9 +51,12 @@ def decide(
     if decision not in ("approve", "reject"):
         raise ValueError(f"Invalid decision: {decision}")
     target = "APPROVED" if decision == "approve" else "REJECTED"
+    # Merge, don't replace: the voice call's metadata (e.g. stored prompt files)
+    # is still needed after the decision to finish and clean up the call.
+    metadata = {**dict(approval.get("raw_response_json") or {}), **(raw_response or {})}
     if not service.transition_approval(
         approval["id"], approval["status"], target,
-        approver=approver, channel=channel, raw_response_json=raw_response,
+        approver=approver, channel=channel, raw_response_json=metadata or None,
     ):
         raise InvalidStateError("Approval was already decided")
 

@@ -51,6 +51,27 @@ class FreshDeskMCPUnavailableError(FreshDeskUnavailableError):
     pass
 
 
+class FreshDeskMCPSessionError(FreshDeskMCPError):
+    """The server rejected the conversation_id (expired or unknown session)."""
+
+    pass
+
+
+# Conversations come back oldest first, so a newly added note is on the last page.
+CONVERSATIONS_PER_PAGE = 100  # server maximum
+MAX_CONVERSATION_PAGES = 10
+
+
+def _is_session_error(text: str) -> bool:
+    """True if an MCP error message says the conversation/session is not valid."""
+    text = (text or "").lower()
+    if "conversation_id" in text:
+        return True
+    return ("conversation" in text or "session" in text) and any(
+        word in text for word in ("expired", "invalid", "unknown")
+    )
+
+
 def reset_session() -> None:
     """Clear the cached MCP conversation_id (used by tests)."""
     global _conversation_id
@@ -113,6 +134,8 @@ def _rpc_call(method: str, params: dict, request_id: int = 1) -> dict:
         raise FreshDeskMCPError("MCP returned invalid JSON envelope") from e
 
     if "error" in envelope:
+        if _is_session_error(str(envelope["error"])):
+            raise FreshDeskMCPSessionError(f"MCP session rejected: {envelope['error']}")
         raise FreshDeskMCPError(f"MCP JSON-RPC error: {envelope['error']}")
 
     return envelope
@@ -139,6 +162,8 @@ def _call_tool(tool_name: str, arguments: dict) -> dict:
             raise FreshDeskMCPError(f"Not found in Freshdesk (tool '{tool_name}', HTTP 404)")
         if status_code in (401, 403):
             raise FreshDeskMCPError(f"Freshdesk rejected MCP credentials (HTTP {status_code})")
+        if _is_session_error(message):
+            raise FreshDeskMCPSessionError(f"MCP session rejected: {message[:200]}")
         raise FreshDeskMCPError(f"MCP tool '{tool_name}' error: {message[:200]}")
 
     content = result.get("content", [])
@@ -173,10 +198,25 @@ def _get_conversation_id() -> str:
 
 
 def _call_with_session(tool_name: str, arguments: dict) -> dict:
-    """Call a tool, auto-injecting the session conversation_id."""
+    """Call a tool, auto-injecting the session conversation_id.
+
+    The conversation_id is cached for the whole process. If the server says it
+    has expired, start one new conversation and retry once. That is safe even
+    for writes: the server rejected the call before doing anything.
+    """
     args = dict(arguments)
-    args["conversation_id"] = _get_conversation_id()
-    return _call_tool(tool_name, args)
+    for attempt in (1, 2):
+        args["conversation_id"] = _get_conversation_id()
+        try:
+            inner = _call_tool(tool_name, args)
+            if inner.get("status") not in ("OK", None) and _is_session_error(str(inner.get("message"))):
+                raise FreshDeskMCPSessionError(f"MCP session rejected: {str(inner.get('message'))[:200]}")
+            return inner
+        except FreshDeskMCPSessionError:
+            if attempt == 2:
+                raise
+            logger.info("MCP conversation expired; starting a new one")
+            reset_session()
 
 
 def fetch_ticket(ticket_id: int) -> Optional[FreshDeskTicket]:
@@ -281,27 +321,40 @@ def fetch_ticket_conversations(ticket_id: int) -> list:
 
     logger.info(f"Fetching conversations for ticket {ticket_id} via MCP", extra={"ticket_id": ticket_id})
 
-    inner = _call_with_session(
-        "fetchTicketConversations",
-        {"id": ticket_id, "_reasoning": f"GhostWork verification agent reading ticket {ticket_id} conversations"},
-    )
+    conversations = []
+    cursor = None
+    for _ in range(MAX_CONVERSATION_PAGES):
+        arguments = {
+            "id": ticket_id,
+            "per_page": CONVERSATIONS_PER_PAGE,
+            "_reasoning": f"GhostWork verification agent reading ticket {ticket_id} conversations",
+        }
+        if cursor:
+            arguments["cursor"] = cursor
+        inner = _call_with_session("fetchTicketConversations", arguments)
 
-    if inner.get("error"):
-        raise FreshDeskMCPError(f"MCP error: {inner.get('message', 'Unknown error')}")
+        if inner.get("error"):
+            raise FreshDeskMCPError(f"MCP error: {inner.get('message', 'Unknown error')}")
 
-    # Live server returns {"results": [...]} at the top level; accept a "data"
-    # wrapper too so a server-side format change can't silently empty the list.
-    data = inner.get("data")
-    if "results" in inner:
-        conversations = inner["results"]
-    elif isinstance(data, dict):
-        conversations = data.get("results", [])
-    elif isinstance(data, list):
-        conversations = data
-    else:
-        raise FreshDeskMCPError("MCP returned conversations in an unrecognized format")
-    if not isinstance(conversations, list):
-        raise FreshDeskMCPError("MCP returned malformed conversations")
+        # Live server returns {"results": [...], "nextCursor": "..."} at the top
+        # level; accept a "data" wrapper too so a format change can't silently
+        # empty the list.
+        data = inner.get("data")
+        if "results" in inner:
+            page = inner["results"]
+        elif isinstance(data, dict):
+            page = data.get("results", [])
+        elif isinstance(data, list):
+            page = data
+        else:
+            raise FreshDeskMCPError("MCP returned conversations in an unrecognized format")
+        if not isinstance(page, list):
+            raise FreshDeskMCPError("MCP returned malformed conversations")
+        conversations.extend(page)
+
+        cursor = inner.get("nextCursor") or (data.get("nextCursor") if isinstance(data, dict) else None)
+        if not cursor or not page:
+            break
     logger.info(
         f"Fetched {len(conversations)} conversations for ticket {ticket_id}",
         extra={"ticket_id": ticket_id, "count": len(conversations)},

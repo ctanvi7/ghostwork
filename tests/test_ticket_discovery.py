@@ -55,7 +55,14 @@ def test_only_patterns_with_a_playbook_are_automatable():
     refund = patterns["refund"]
     assert refund["automation"]["decision"] == "AUTOMATE"
     assert refund["name"] == "Refund Verification"  # lets GhostSkill generation resolve the workflow
-    for key in ("it_troubleshooting", "shipping_delay", "product_defect", "general"):
+
+    windows = patterns["it_troubleshooting"]
+    assert windows["automation"]["decision"] == "AUTOMATE"
+    assert windows["name"] == "Windows Troubleshooting"
+    assert windows["risk_level"] == "low"  # advice only, no approval gate
+    assert "no human approval is required" in windows["automation"]["reason"]
+
+    for key in ("shipping_delay", "product_defect", "general"):
         assert patterns[key]["automation"]["decision"] == "HUMAN_REVIEW"
 
 
@@ -166,14 +173,16 @@ def test_handoff_route_unavailable_without_freshdesk(client):
 
 
 def test_handoff_route_uses_server_side_reason(client):
+    # Ticket 9 ("General customer service inquiry") has no playbook, unlike
+    # Windows Troubleshooting and Refund Verification.
     with patch("services.ticket_discovery_service.fetch_unresolved_tickets", return_value=TICKETS), \
          patch("services.handoff_service.route_to_human",
                return_value={"status": "routed_to_human", "verified": True}) as route:
-        response = client.post("/api/discovery/tickets/8/handoff")
+        response = client.post("/api/discovery/tickets/9/handoff")
 
     assert response.status_code == 200
     ticket_id, name, reason = route.call_args.args
-    assert (ticket_id, name) == (8, "Windows Troubleshooting")
+    assert (ticket_id, name) == (9, "General Inquiry")
     assert "No approved automation playbook" in reason
 
 

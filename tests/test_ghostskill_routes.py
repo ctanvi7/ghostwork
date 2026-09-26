@@ -1,7 +1,6 @@
 """Full acceptance path tests for GhostSkill routes."""
 
 import json
-import pytest
 
 
 class TestGhostSkillGeneration:
@@ -312,7 +311,7 @@ class TestGhostSkillErrorHandling:
 
     def test_generate_skill_without_body(self, client):
         """Test that generating without a body returns 422."""
-        response = client.post(
+        client.post(
             "/api/discovery/workflows/1/ghostskill",
             data=None,
         )

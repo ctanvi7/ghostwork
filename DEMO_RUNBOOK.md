@@ -26,7 +26,7 @@
 10. Click `Call Approver`.
 11. Vobiz calls the manager.
 12. Sarvam speaks the approval request.
-13. Manager says "approve" or presses 1, then presses 1 again to confirm. Pressing 2 rejects.
+13. Manager presses 1 to approve or 2 to reject (key presses only; speech is not used).
 14. Execution resumes.
 15. Freshdesk is updated.
 16. Verification Agent checks the final state.
@@ -35,8 +35,8 @@
 19. Close: **"Most automation platforms automate workflows companies already know. GhostWork discovers the ones they don't."**
 
 ## Fallbacks
-### If Sarvam speech recognition fails
-Press 1 to request approval, then 1 again to confirm. Press 2 to reject.
+### If Sarvam text-to-speech fails
+Vobiz reads the same prompt with its built-in voice. Press 1 to approve, 2 to reject.
 
 ### If Vobiz fails
 Use web approval.
@@ -46,7 +46,7 @@ Set `VOBIZ_AUTH_ID`, `VOBIZ_AUTH_TOKEN`, `VOBIZ_FROM_NUMBER`, and an HTTPS
 `PUBLIC_BASE_URL` reachable by Vobiz. Assign the demo ticket to an agent whose
 Freshdesk profile has a mobile or phone number: that agent is called.
 `APPROVER_PHONE` is only a fallback. Voice approval needs a known refund amount.
-Set `SARVAM_API_KEY` for generated prompts and spoken responses. A local
+Set `SARVAM_API_KEY` for Sarvam-voiced (and translated) prompts. A local
 `http://localhost:5000` URL cannot receive provider callbacks.
 
 ### If Claude fails

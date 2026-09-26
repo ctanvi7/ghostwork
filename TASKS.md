@@ -42,16 +42,12 @@
 - [x] Record verification result and mark execution COMPLETED/FAILED
 
 ## P1 — Voice Approval
-- [x] Sarvam STT local test (live: English + Hindi approve/reject, ambiguous speech ignored)
 - [x] Sarvam TTS local test (live: approval prompt, bulbul:v3, 8 kHz WAV)
 - [ ] Vobiz outbound-call test
 - [x] Vobiz webhook test (mocked provider callback)
 - [x] Connect TTS audio to call
-- [x] Capture/forward spoken response
-- [x] STT transcript (mocked provider response)
 - [x] Parse approve/reject intent
-- [x] Require confirmation
-- [x] DTMF fallback
+- [x] Single key press decision (1 approve, 2 reject)
 - [x] Web fallback
 
 ## P2 — Polish

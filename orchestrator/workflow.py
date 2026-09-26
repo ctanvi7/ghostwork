@@ -225,5 +225,17 @@ def _import_agent(agent_name: str):
     elif agent_name == "closure_agent":
         from agents import closure_agent
         return closure_agent
+    elif agent_name == "diagnosis_agent":
+        from agents import diagnosis_agent
+        return diagnosis_agent
+    elif agent_name == "it_communication_agent":
+        from agents import it_communication_agent
+        return it_communication_agent
+    elif agent_name == "it_verification_agent":
+        from agents import it_verification_agent
+        return it_verification_agent
+    elif agent_name == "it_closure_agent":
+        from agents import it_closure_agent
+        return it_closure_agent
     else:
         raise ValueError(f"Unknown agent: {agent_name}")

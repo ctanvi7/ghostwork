@@ -1,73 +1,37 @@
-/**
- * Integrations page - load and render integration status
- */
-
 async function loadIntegrations() {
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
+    const content = document.getElementById('content');
+    loading.classList.remove('hidden'); error.classList.add('hidden'); content.classList.add('hidden');
     try {
-        const res = await fetch('/api/integrations');
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
-        }
-
-        const data = await res.json();
-        if (!data.configured || typeof data.configured !== 'object') {
-            throw new Error('Invalid integrations response format');
-        }
+        const data = await api.getIntegrations();
+        if (!data.configured || typeof data.configured !== 'object') throw new Error('Integration status is unavailable.');
         renderIntegrations(data);
-
-        document.getElementById('loading').classList.add('hidden');
-        document.getElementById('content').classList.remove('hidden');
-
-    } catch (err) {
-        console.error('Integrations load error:', err);
-        document.getElementById('loading').classList.add('hidden');
-        document.getElementById('error').classList.remove('hidden');
-    }
+        content.classList.remove('hidden');
+    } catch (cause) { error.classList.remove('hidden'); ui.showError('Integrations unavailable', cause); }
+    finally { loading.classList.add('hidden'); }
 }
 
 function renderIntegrations(data) {
-    const gridEl = document.getElementById('integrations-grid');
     const configured = data.configured || {};
-
     const integrations = [
-        { id: 'claude', name: 'Claude', icon: '🤖', description: 'AI reasoning for policy interpretation' },
-        { id: 'freshdesk', name: 'Freshdesk', icon: '🎫', description: 'Ticket and customer data' },
-        { id: 'supabase', name: 'Supabase', icon: '🗄️', description: 'Execution state and persistence' },
-        { id: 'vobiz', name: 'Vobiz', icon: '📱', description: 'Voice-based approvals (Phase 11)' },
-        { id: 'sarvam', name: 'Sarvam', icon: '🎤', description: 'Speech recognition & synthesis (Phase 11)' },
+        {id:'freshdesk', name:'Freshdesk', description:'Ticket read, write-back and independent verification'},
+        {id:'supabase', name:'Supabase', description:'Workflow, execution and approval records'},
+        {id:'claude', name:'Claude', description:'Policy interpretation and response drafting'},
+        {id:'vobiz', name:'Vobiz', description:'Outbound approval calls'},
+        {id:'sarvam', name:'Sarvam', description:'Voice prompts and speech recognition'}
     ];
-
-    gridEl.innerHTML = integrations.map(integration => {
+    document.getElementById('integrations-grid').innerHTML = integrations.map(integration => {
         const value = configured[integration.id];
-        const isConfigured = integration.id === 'freshdesk'
-            ? value?.configured === true
-            : value === true;
-        const status = isConfigured ? 'Configured' : 'Not configured';
-        const statusClass = isConfigured ? 'status-configured' : 'status-not-configured';
-
-        return `
-            <div class="integration-card">
-                <div class="card-icon">${integration.icon}</div>
-                <h3 class="card-title">${integration.name}</h3>
-                <p class="card-description">${integration.description}</p>
-                <span class="integration-status ${statusClass}">${status}</span>
-                ${!isConfigured && integration.id === 'freshdesk' ?
-                    '<p class="fallback-note">Demo fallback active</p>'
-                    : ''}
-            </div>
-        `;
+        const ready = integration.id === 'freshdesk' ? value?.configured === true : value === true;
+        const providerName = value?.provider === 'mcp' ? 'MCP' : value?.provider === 'rest' ? 'REST' : 'Unknown';
+        const provider = integration.id === 'freshdesk' && value?.provider
+            ? `<p class="fallback-note">Selected provider: ${providerName}</p>` : '';
+        return `<article class="integration-card"><h3 class="card-title">${integration.name}</h3><p class="card-description">${integration.description}</p><span class="integration-status ${ready ? 'status-configured' : 'status-not-configured'}">${ready ? 'Configured' : 'Not configured'}</span>${provider}</article>`;
     }).join('');
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('retry-btn').addEventListener('click', loadIntegrations);
     loadIntegrations();
-
-    // Add retry button listener if it exists
-    const retryBtn = document.getElementById('retry-btn');
-    if (retryBtn) {
-        retryBtn.addEventListener('click', function() {
-            document.getElementById('error').classList.add('hidden');
-            loadIntegrations();
-        });
-    }
 });

@@ -1,78 +1,38 @@
-/**
- * Dashboard page functionality
- */
-
-async function loadWorkflows() {
+async function loadDashboard() {
+    const loading = document.getElementById('dashboard-loading');
+    const error = document.getElementById('dashboard-error');
+    const content = document.getElementById('dashboard-content');
+    loading.classList.remove('hidden'); error.classList.add('hidden'); content.classList.add('hidden');
     try {
-        const response = await api.getWorkflows();
-        const workflows = response.workflows || [];
-        const container = document.getElementById('workflows-list');
-        container.innerHTML = '';
-
-        if (workflows.length === 0) {
-            container.innerHTML = '<p class="empty-state">No workflows discovered.</p>';
-            return;
-        }
-
-        workflows.forEach(workflow => {
-            const card = createWorkflowCard(workflow);
-            container.appendChild(card);
-        });
-    } catch (error) {
-        ui.showError('Failed to load workflows', error);
-    }
+        const [workflowData, executionData] = await Promise.all([
+            api.getDiscoveredWorkflows(1), api.listExecutions(20)
+        ]);
+        const workflows = workflowData.workflows || [];
+        const executions = executionData.executions || [];
+        const pending = executions.filter(item => item.status === 'WAITING_FOR_APPROVAL');
+        document.getElementById('dashboard-metrics').innerHTML = [
+            ['Discovered workflows', workflows.length, 'From current discovery data'],
+            ['Recent executions', executions.length, 'Latest 20 workflow runs'],
+            ['Recent approvals due', pending.length, 'Among the latest 20 runs']
+        ].map(([label, value, note]) => `<div class="metric-card"><span class="metric-label">${label}</span><strong class="metric-value">${value}</strong><span class="metric-note">${note}</span></div>`).join('');
+        document.getElementById('dashboard-source').textContent = workflowData.source === 'freshdesk'
+            ? 'Patterns found in live Freshdesk ticket metadata.' : 'Patterns from available activity events.';
+        document.getElementById('dashboard-approvals').innerHTML = pending.length
+            ? pending.slice(0, 3).map(item => `<div class="ticket-row"><span><strong>Execution #${Number(item.id)}</strong><span class="ticket-meta">Ticket #${escapeHtml(item.ticket_id ?? '—')} · ${escapeHtml(item.workflow_name || 'Workflow')}</span></span><a class="btn btn-secondary btn-small" href="/execution/${Number(item.id)}">Review</a></div>`).join('')
+            : '<p class="empty-state">No executions are waiting for approval.</p>';
+        document.getElementById('dashboard-executions').innerHTML = executions.length
+            ? executions.slice(0, 5).map(item => `<div class="ticket-row"><span><strong>Execution #${Number(item.id)}</strong><span class="ticket-meta">${escapeHtml(item.workflow_name || 'Workflow')} · ${escapeHtml(ui.statusLabel(item.status))}</span></span><a class="btn btn-secondary btn-small" href="/execution/${Number(item.id)}">View execution</a></div>`).join('')
+            : '<p class="empty-state">No executions yet. Explore a workflow to begin.</p>';
+        document.getElementById('dashboard-workflows').innerHTML = workflows.length
+            ? workflows.slice(0, 4).map(item => `<div class="ticket-row"><span><strong>${escapeHtml(item.name)}</strong><span class="ticket-meta">${Number(item.frequency || 0)} observed · ${escapeHtml(item.automation?.automatable ? 'Automation available' : 'Human review')}</span></span><a class="btn btn-secondary btn-small" href="/workflow/${Number(item.id)}">View workflow</a></div>`).join('')
+            : '<p class="empty-state">No workflows discovered yet. Check the Freshdesk integration or try again.</p>';
+        content.classList.remove('hidden');
+    } catch (cause) {
+        error.classList.remove('hidden');
+        ui.showError('Dashboard unavailable', cause);
+    } finally { loading.classList.add('hidden'); }
 }
-
-function createWorkflowCard(workflow) {
-    const card = document.createElement('div');
-    card.className = 'workflow-card';
-
-    const ghostScore = workflow.ghost_score || 0;
-    const frequency = workflow.frequency || 0;
-    const automation = workflow.automation_percentage || 0;
-    const duration = formatDuration(workflow.manual_duration_seconds || 0);
-
-    card.innerHTML = `
-        <div class="card-header">
-            <h3>${escapeHtml(workflow.name)}</h3>
-            <div class="ghost-score">GhostScore: ${ghostScore}</div>
-        </div>
-        <p class="description">${escapeHtml(workflow.description || '')}</p>
-        <div class="metrics">
-            <div class="metric">
-                <span class="label">Frequency</span>
-                <span class="value">${frequency} cases</span>
-            </div>
-            <div class="metric">
-                <span class="label">Automation</span>
-                <span class="value">${automation}%</span>
-            </div>
-            <div class="metric">
-                <span class="label">Manual Duration</span>
-                <span class="value">${duration}</span>
-            </div>
-        </div>
-        <a href="/workflow/${workflow.id}" class="btn btn-primary">
-            Run Workflow
-        </a>
-    `;
-
-    return card;
-}
-
-function formatDuration(seconds) {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-
-    if (hours > 0) {
-        return `${hours}h ${minutes}m`;
-    } else if (minutes > 0) {
-        return `${minutes}m ${secs}s`;
-    } else {
-        return `${secs}s`;
-    }
-}
-
-// Load workflows on page load
-window.addEventListener('load', loadWorkflows);
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('dashboard-retry').addEventListener('click', loadDashboard);
+    loadDashboard();
+});

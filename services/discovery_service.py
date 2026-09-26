@@ -2,6 +2,7 @@
 
 import json
 import logging
+import zlib
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -16,7 +17,7 @@ def load_activity_events(filepath: Optional[str] = None) -> List[Dict[str, Any]]
         filepath = str(Path(__file__).parent.parent / "data" / "activity_events.json")
 
     try:
-        with open(filepath, "r") as f:
+        with open(filepath, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
         logger.error(f"Failed to load activity events: {e}")
@@ -175,10 +176,19 @@ def normalize_discovered_workflow(
         step_signatures=signature
     )
 
+    # Same deterministic playbook rule as the Freshdesk path, so the UI shows
+    # one automation decision whichever data source was used.
+    from services.ticket_discovery_service import PLAYBOOKS, assess_automation
+
+    name = _label_workflow(signature)
+    category = next((key for key, workflow_name in PLAYBOOKS.items() if workflow_name == name), "activity")
+
     return {
-        "id": workflow_id or hash(tuple(signature)) & 0x7fffffff,
-        "name": _label_workflow(signature),
+        "id": workflow_id or _signature_id(signature),
+        "name": name,
         "frequency": frequency,
+        "is_repeating": frequency >= 2,
+        "automation": assess_automation(category, name, frequency),
         "sequence": workflow.get("sequence", ""),
         "step_signatures": signature,
         "step_count": step_count,
@@ -192,6 +202,11 @@ def normalize_discovered_workflow(
         "data_sources": ["tool", "action", "timestamp", "session"],
         "session_ids": workflow.get("session_ids", []),
     }
+
+
+def _signature_id(signature: List[str]) -> int:
+    """Stable ID across restarts and server instances (Python's hash() is randomized per process)."""
+    return zlib.crc32("activity:{}".format("|".join(signature)).encode()) & 0x7FFFFFFF
 
 
 def _label_workflow(signature: List[str]) -> str:

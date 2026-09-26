@@ -44,7 +44,7 @@ Browser UI
 - Freshworks: Freshdesk REST API v2
 - LLM: Anthropic Claude API
 - Voice telephony: Vobiz
-- Speech: Sarvam STT + TTS
+- Speech: Sarvam TTS (approval prompts)
 - Version control: Git + GitHub
 - Testing: pytest
 - Prompting during build: Wispr Flow
@@ -348,13 +348,7 @@ Sarvam TTS creates prompt audio
         ↓
 Manager hears request
         ↓
-Manager responds by speech or DTMF
-        ↓
-Sarvam STT converts speech to text
-        ↓
-GhostWork parses intent
-        ↓
-Require second confirmation
+Manager presses 1 (approve) or 2 (reject)
         ↓
 APPROVED / REJECTED
         ↓
@@ -362,10 +356,9 @@ Resume or stop workflow
 ```
 
 ### Safety
-- Speech approval alone is not final for high-value actions.
-- Require "CONFIRM APPROVE" or DTMF 1.
-- DTMF 2 rejects.
-- Ambiguous speech → ask again.
+- Only a key press decides: DTMF 1 approves, DTMF 2 rejects.
+- Speech is not interpreted; any other key → ask again.
+- No key press → approval stays pending; web approval remains available.
 
 ## 12. Workflow Discovery
 Primary source: live Freshdesk tickets (`services/ticket_discovery_service.py`).

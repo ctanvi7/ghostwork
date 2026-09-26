@@ -9,6 +9,7 @@ from services.claude_service import extract_ticket_context
 from services.freshdesk_service import (
     FreshDeskError,
     FreshDeskUnavailableError,
+    cached_demo_ticket,
     extract_invoice_id,
     extract_refund_amount,
     get_last_provider_used,
@@ -30,13 +31,35 @@ def _deterministic_refund_amount(freshdesk_ticket) -> Optional[Decimal]:
     return amount if amount.is_finite() and amount > 0 else None
 
 
+def _cached_ticket(ticket_id):
+    try:
+        return cached_demo_ticket(int(ticket_id))
+    except (TypeError, ValueError):
+        return None
+
+
 def _apply_refund_amount(execution: Dict[str, Any], freshdesk_ticket) -> str:
-    """Fill a missing execution refund_amount from Freshdesk; return where the amount came from."""
-    if execution.get("refund_amount") is not None:
-        return "request"
+    """Set the execution refund_amount from the ticket; return where the amount came from.
+
+    The ticket's Refund Amount field is the system of record, so it always wins
+    over an amount sent in the request. Otherwise a caller could send a small
+    amount for a large refund and skip the approval gate. The request amount
+    is used only when the ticket has no valid amount.
+    """
     amount = _deterministic_refund_amount(freshdesk_ticket)
     if amount is None:
-        return "missing"
+        return "request" if execution.get("refund_amount") is not None else "missing"
+
+    requested = execution.get("refund_amount")
+    try:
+        differs = requested is not None and Decimal(str(requested)) != amount
+    except InvalidOperation:
+        differs = True
+    if differs:
+        logger.warning(
+            f"Execution {execution.get('id')}: request amount {requested} ignored; "
+            f"ticket #{freshdesk_ticket.ticket_id} Refund Amount field is {amount}"
+        )
     execution["refund_amount"] = float(amount)
     if execution.get("id"):
         from services.supabase_service import get_service
@@ -87,6 +110,18 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
                 source = "fallback_error"
                 freshdesk_error = str(e)[:120]
 
+        # Demo safety (FRESHDESK_FALLBACK=cache): Freshdesk could not be read,
+        # so use the cached demo ticket. It is labeled "cached_demo", never
+        # "freshdesk", so no write-back or closure is attempted on it.
+        if freshdesk_ticket is None and ticket_id:
+            cached = _cached_ticket(ticket_id)
+            if cached is not None:
+                freshdesk_ticket = cached
+                ticket_text = f"Subject: {cached.subject}\n\n{cached.description_text}"
+                source = "cached_demo"
+                freshdesk_error = freshdesk_error or "Freshdesk not configured"
+                logger.info(f"Using cached demo ticket {ticket_id}; Freshdesk unavailable")
+
         # Step 2: Extract structured context using Claude
         ticket_context = extract_ticket_context(ticket_text)
 
@@ -119,7 +154,9 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
         }
 
         if freshdesk_ticket:
-            result["reason"] = f"Context extracted from Freshdesk ticket #{freshdesk_ticket.ticket_id}"
+            live = source == "freshdesk"
+            result["reason"] = (f"Context extracted from Freshdesk ticket #{freshdesk_ticket.ticket_id}" if live
+                                else f"Freshdesk unavailable; used cached demo ticket #{freshdesk_ticket.ticket_id}")
             result["provider"] = provider
             result["refund_amount_source"] = _apply_refund_amount(execution, freshdesk_ticket)
             # Only non-personal ticket metadata, so the UI can prove the real source.
@@ -128,9 +165,9 @@ def run(execution: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> 
                 "subject": freshdesk_ticket.subject,
                 "priority": freshdesk_ticket.priority,
                 "status": (freshdesk_ticket.raw_response or {}).get("status"),
-                "url": Config.freshdesk_ticket_url(freshdesk_ticket.ticket_id),
+                "url": Config.freshdesk_ticket_url(freshdesk_ticket.ticket_id) if live else None,
             }
-        elif freshdesk_error:
+        if freshdesk_error:
             result["freshdesk_error"] = freshdesk_error
 
         return {"status": "SUCCESS", "result": result}

@@ -92,8 +92,10 @@ class TestIntegrationsAPIContract:
             else:
                 assert isinstance(value, bool), f"{key} value should be boolean, got {type(value)}"
 
-    def test_integrations_claude_configured_demo(self, client):
-        """In demo, Claude should be configured (true)."""
+    def test_integrations_claude_configured_demo(self, client, monkeypatch):
+        """In demo, Claude should be configured (true) when its key is set."""
+        from config import Config
+        monkeypatch.setattr(Config, "ANTHROPIC_API_KEY", "test-anthropic-key")
         response = client.get("/api/integrations")
         data = response.get_json()
 
@@ -180,13 +182,18 @@ class TestUIResponseIntegration:
 
     def test_discovery_page_loads(self, client):
         """Discovery page HTML loads without error."""
-        response = client.get("/")
+        response = client.get("/workflows")
 
         assert response.status_code == 200
         html = response.get_data(as_text=True)
         assert "Discovery" in html or "GhostWork" in html
         # Should load external JS (CSP compliant)
         assert "discovery.js" in html
+
+    def test_dashboard_page_loads(self, client):
+        response = client.get("/")
+        assert response.status_code == 200
+        assert "dashboard.js" in response.get_data(as_text=True)
 
     def test_executions_page_loads(self, client):
         """Executions page HTML loads without error."""

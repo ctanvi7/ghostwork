@@ -241,15 +241,16 @@ def _generate_description(name: str, frequency: int) -> str:
     # Try Claude if configured
     if Config.ANTHROPIC_API_KEY:
         try:
-            from services.claude_service import Anthropic
+            from services.claude_service import Anthropic, make_client
 
             if Anthropic is None:
                 raise ImportError("Anthropic SDK not installed")
 
-            client = Anthropic(api_key=Config.ANTHROPIC_API_KEY)
+            client = make_client()
+            # Room for adaptive thinking; the text itself is capped at 150 chars below.
             response = client.messages.create(
                 model=Config.CLAUDE_MODEL,
-                max_tokens=100,
+                max_tokens=1000,
                 messages=[
                     {
                         "role": "user",
